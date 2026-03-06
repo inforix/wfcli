@@ -1,0 +1,20 @@
+{
+  "name": "wfcli",
+  "version": "0.1.0",
+  "description": "Workflow CLI for SHMTU InfoPlus",
+  "main": "src/cli.js",
+  "bin": {
+    "wfcli": "src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "commander": "^14.0.3",
+    "dotenv": "^17.3.1"
+  }
+}
