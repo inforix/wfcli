@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { Command } from "commander";
 import { registerAppsCommands } from "./commands/apps.js";
 import { registerAuthCommands } from "./commands/auth.js";
+import { registerFileCommands } from "./commands/file.js";
 import { registerTasksCommands } from "./commands/tasks.js";
 import { registerVersionCommands } from "./commands/version.js";
 
@@ -23,6 +24,7 @@ program
 registerAppsCommands(program);
 registerTasksCommands(program);
 registerAuthCommands(program);
+registerFileCommands(program);
 registerVersionCommands(program, version);
 
 program.parseAsync(process.argv).catch((error) => {

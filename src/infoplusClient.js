@@ -18,6 +18,18 @@ function apiUrl(baseUrl, path) {
   return `${baseUrl}/infoplus/apis/v2/${path}`;
 }
 
+function fileApiUrl(baseUrl, path = "") {
+  const normalized = path ? `/${path}` : "";
+  return `${baseUrl}/infoplus/file${normalized}`;
+}
+
+function encodeFileKey(fileKey) {
+  return `${fileKey}`
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
 function normalizeOAuthScope(scope) {
   return `${scope || ""}`
     .trim()
@@ -42,6 +54,24 @@ async function parseJsonResponse(response) {
   } catch {
     throw new Error(`Expected JSON response, received: ${body.slice(0, 200)}`);
   }
+}
+
+async function parseResponsePayload(response) {
+  const contentType = `${response.headers.get("content-type") || ""}`.toLowerCase();
+  const body = await response.text();
+  if (!body) {
+    return {};
+  }
+
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(body);
+    } catch {
+      throw new Error(`Expected JSON response, received: ${body.slice(0, 200)}`);
+    }
+  }
+
+  return body;
 }
 
 function createRequestError(message, status, payload) {
@@ -453,4 +483,122 @@ export async function executeTask(config, username, taskId, accessToken, fetchIm
 
   const details = errors.map((error) => error.message).join(" | ");
   throw new Error(`Failed to execute task "${taskId}". ${details}`);
+}
+
+async function requestFileApi(requestOptions, fetchImpl) {
+  const { url, method, accessToken, body, headers = {}, errorContext } = requestOptions;
+  const response = await fetchImpl(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...headers
+    },
+    body
+  });
+
+  const payload = await parseResponsePayload(response);
+  if (!response.ok) {
+    throw markLoginRequiredIfNeeded(
+      createRequestError(
+        `${errorContext} (status=${response.status}, payload=${JSON.stringify(payload)})`,
+        response.status,
+        payload
+      )
+    );
+  }
+
+  return payload;
+}
+
+export async function uploadFile(
+  config,
+  accessToken,
+  { fileName, content, keepFileName = false },
+  fetchImpl = fetch
+) {
+  const form = new FormData();
+  form.append("file", new Blob([content]), fileName);
+  const query = keepFileName ? "?keepFileName=true" : "";
+  return requestFileApi(
+    {
+      url: `${fileApiUrl(config.baseUrl)}${query}`,
+      method: "POST",
+      accessToken,
+      body: form,
+      errorContext: `Failed to upload file "${fileName}"`
+    },
+    fetchImpl
+  );
+}
+
+export async function updateFile(
+  config,
+  fileKey,
+  accessToken,
+  { fileName, content, keepFileName = false },
+  fetchImpl = fetch
+) {
+  const form = new FormData();
+  form.append("file", new Blob([content]), fileName);
+  const query = keepFileName ? "?keepFileName=true" : "";
+  return requestFileApi(
+    {
+      url: `${fileApiUrl(config.baseUrl, encodeFileKey(fileKey))}${query}`,
+      method: "PUT",
+      accessToken,
+      body: form,
+      errorContext: `Failed to update file "${fileKey}"`
+    },
+    fetchImpl
+  );
+}
+
+export async function fetchFileMeta(config, fileKey, accessToken, fetchImpl = fetch) {
+  return requestFileApi(
+    {
+      url: fileApiUrl(config.baseUrl, `${encodeFileKey(fileKey)}/meta`),
+      method: "GET",
+      accessToken,
+      errorContext: `Failed to fetch file meta "${fileKey}"`
+    },
+    fetchImpl
+  );
+}
+
+export async function deleteFile(config, fileKey, accessToken, fetchImpl = fetch) {
+  return requestFileApi(
+    {
+      url: fileApiUrl(config.baseUrl, encodeFileKey(fileKey)),
+      method: "DELETE",
+      accessToken,
+      errorContext: `Failed to delete file "${fileKey}"`
+    },
+    fetchImpl
+  );
+}
+
+export async function downloadFile(config, fileKey, accessToken, fetchImpl = fetch) {
+  const response = await fetchImpl(fileApiUrl(config.baseUrl, `${encodeFileKey(fileKey)}/download`), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  if (!response.ok) {
+    const payload = await parseResponsePayload(response);
+    throw markLoginRequiredIfNeeded(
+      createRequestError(
+        `Failed to download file "${fileKey}" (status=${response.status}, payload=${JSON.stringify(payload)})`,
+        response.status,
+        payload
+      )
+    );
+  }
+
+  return {
+    data: Buffer.from(await response.arrayBuffer()),
+    contentType: response.headers.get("content-type") || "",
+    contentDisposition: response.headers.get("content-disposition") || ""
+  };
 }

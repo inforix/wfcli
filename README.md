@@ -10,6 +10,11 @@ Implemented command:
 - `wfcli auth refresh-token`
 - `wfcli version`
 - `wfcli apps list`
+- `wfcli file upload <path>`
+- `wfcli file update <fileKey> <path>`
+- `wfcli file meta <fileKey>`
+- `wfcli file delete <fileKey>`
+- `wfcli file download <fileKey>`
 - `wfcli tasks todo`
 - `wfcli tasks execute <taskId>`
 - `wfcli tasks doing`
@@ -74,6 +79,14 @@ npx wfcli apps list --json
 npx wfcli version
 npx wfcli --version
 
+# File operations (InfoPlus FileAPI)
+# API reference: https://github.com/infoplus/docs/wiki/InfoPlusAPI
+npx wfcli file upload ./demo.txt --keep-name
+npx wfcli file meta file-key-1
+npx wfcli file download file-key-1 --output ./downloaded.txt
+npx wfcli file update file-key-1 ./new-demo.txt --keep-name
+npx wfcli file delete file-key-1
+
 # Task commands
 # todo output columns: process uri, name, source username, date
 npx wfcli tasks todo
@@ -105,6 +118,11 @@ npx wfcli tasks execute 123456 --username alice
 - `GET /infoplus/apis/v2/me/processes/done`
 - `GET /infoplus/apis/v2/me/processes/completed`
 - `POST /infoplus/apis/v2/tasks/{id}` (fallback: `/task/{id}`)
+- `POST /infoplus/file` (upload)
+- `GET /infoplus/file/{fileKey}/meta`
+- `GET /infoplus/file/{fileKey}/download`
+- `PUT /infoplus/file/{fileKey}`
+- `DELETE /infoplus/file/{fileKey}`
 
 If Basic client auth is rejected by the server during token exchange, it retries with
 `client_id` and `client_secret` in the form body.
