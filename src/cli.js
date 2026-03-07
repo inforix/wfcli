@@ -7,6 +7,7 @@ import { registerAppsCommands } from "./commands/apps.js";
 import { registerAuthCommands } from "./commands/auth.js";
 import { registerFileCommands } from "./commands/file.js";
 import { registerTasksCommands } from "./commands/tasks.js";
+import { registerUserCommands } from "./commands/user.js";
 import { registerVersionCommands } from "./commands/version.js";
 
 dotenv.config({ quiet: true });
@@ -25,6 +26,7 @@ registerAppsCommands(program);
 registerTasksCommands(program);
 registerAuthCommands(program);
 registerFileCommands(program);
+registerUserCommands(program);
 registerVersionCommands(program, version);
 
 program.parseAsync(process.argv).catch((error) => {

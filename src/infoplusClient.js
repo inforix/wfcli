@@ -361,6 +361,20 @@ export async function fetchMyApps(config, accessToken, fetchImpl = fetch) {
   return payload.entities;
 }
 
+export async function fetchMyProfile(config, accessToken, fetchImpl = fetch) {
+  const entities = await requestInfoPlusEntities(
+    {
+      url: meScopedApiUrl(config.baseUrl, "profile"),
+      method: "GET",
+      accessToken,
+      errorContext: "Failed to fetch current user profile"
+    },
+    fetchImpl
+  );
+
+  return entities[0] || null;
+}
+
 export async function fetchAppMeta(
   config,
   idc,

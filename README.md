@@ -22,6 +22,7 @@ Implemented command:
 - `wfcli tasks doing`
 - `wfcli tasks done`
 - `wfcli tasks list`
+- `wfcli user profile`
 
 ## Setup
 
@@ -76,6 +77,10 @@ npx wfcli auth show-token --json
 
 # List current user's apps (from personal token)
 npx wfcli apps list
+
+# Get current user profile
+npx wfcli user profile
+npx wfcli user profile --json
 
 # Get app definition (schema/fields) for building tasks start --data
 npx wfcli apps definition BKQDJ > bkqdj-definition.json
@@ -136,9 +141,10 @@ npx wfcli tasks execute "$TASK_ID" --action-code approve --remark "已处理"
 - saves `access_token` into OS keyring
 - `wfcli auth refresh-token` can refresh the stored token via `grant_type=refresh_token`
 
-`wfcli apps` and `wfcli tasks` then read this keyring token and call:
+`wfcli apps`, `wfcli user`, and `wfcli tasks` then read this keyring token and call:
 
 - `GET /infoplus/apis/v2/me/apps` (`apps list`, personal method)
+- `GET /infoplus/apis/v2/me/profile` (`user profile`)
 - `GET /infoplus/apis/v2/me/tasks/todo`
 - `GET /infoplus/apis/v2/me/processes/doing`
 - `GET /infoplus/apis/v2/me/processes/done`

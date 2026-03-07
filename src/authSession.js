@@ -20,13 +20,25 @@ function normalizeStoredSession(value) {
   if (!value.accessToken || typeof value.accessToken !== "string") {
     return null;
   }
+  function normalizeEpochMs(timestamp) {
+    if (!timestamp) {
+      return null;
+    }
+    const numeric = Number(timestamp);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      return null;
+    }
+    // Compatibility: older/manual entries may store epoch in seconds.
+    return numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+  }
+
   return {
     accessToken: value.accessToken,
     tokenType: value.tokenType || "bearer",
     scope: value.scope,
     refreshToken: value.refreshToken,
-    obtainedAt: value.obtainedAt || null,
-    expiresAt: value.expiresAt || null
+    obtainedAt: normalizeEpochMs(value.obtainedAt),
+    expiresAt: normalizeEpochMs(value.expiresAt)
   };
 }
 
