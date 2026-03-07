@@ -1,0 +1,4 @@
+interface:
+  display_name: "Attendance Correction Registration"
+  short_description: "Submit and troubleshoot 补考勤登记 via wfcli"
+  default_prompt: "Use this skill to complete SHMTU InfoPlus attendance correction registration (补考勤登记) with wfcli, including schema discovery, process start/submit, and error handling."
