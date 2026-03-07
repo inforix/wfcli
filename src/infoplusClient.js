@@ -14,8 +14,14 @@ function meScopedApiUrl(baseUrl, path) {
   return `${baseUrl}/infoplus/apis/v2/me/${path}`;
 }
 
+function versionedApiUrl(baseUrl, apiVersion, path, { trailingSlash = false } = {}) {
+  const normalizedPath = `${path}`.replace(/^\/+/, "");
+  const suffix = trailingSlash ? "/" : "";
+  return `${baseUrl}/infoplus/apis/${apiVersion}/${normalizedPath}${suffix}`;
+}
+
 function apiUrl(baseUrl, path) {
-  return `${baseUrl}/infoplus/apis/v2/${path}`;
+  return versionedApiUrl(baseUrl, "v2", path);
 }
 
 function fileApiUrl(baseUrl, path = "") {
@@ -355,6 +361,70 @@ export async function fetchMyApps(config, accessToken, fetchImpl = fetch) {
   return payload.entities;
 }
 
+export async function fetchAppMeta(
+  config,
+  idc,
+  accessToken,
+  { version, includeForms = false, includeVersions = false, includeDefinition = false } = {},
+  fetchImpl = fetch
+) {
+  const query = new URLSearchParams();
+  if (version) {
+    query.set("version", version);
+  }
+  if (includeForms) {
+    query.set("includeForms", "true");
+  }
+  if (includeVersions) {
+    query.set("includeVersions", "true");
+  }
+  if (includeDefinition) {
+    query.set("includeDefinition", "true");
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const encodedIdc = encodeURIComponent(idc);
+  const response = await fetchImpl(`${apiUrl(config.baseUrl, `app/${encodedIdc}`)}${suffix}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json"
+    }
+  });
+
+  const payload = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw markLoginRequiredIfNeeded(
+      createRequestError(
+        `Failed to fetch app "${idc}" (status=${response.status}, payload=${JSON.stringify(payload)})`,
+        response.status,
+        payload
+      )
+    );
+  }
+
+  if (typeof payload.errno !== "number") {
+    throw new Error(`Invalid InfoPlus response: ${JSON.stringify(payload)}`);
+  }
+
+  if (payload.errno !== 0) {
+    throw markLoginRequiredIfNeeded(
+      createRequestError(
+        `InfoPlus API error: errno=${payload.errno}, ecode=${payload.ecode || ""}, error=${payload.error || "unknown"}`,
+        response.status,
+        payload
+      )
+    );
+  }
+
+  if (!Array.isArray(payload.entities)) {
+    throw new Error(`Invalid InfoPlus response: entities is not an array`);
+  }
+
+  return payload.entities[0] || null;
+}
+
 async function requestInfoPlusEntities(requestOptions, fetchImpl) {
   const { url, method, accessToken, body, errorContext } = requestOptions;
 
@@ -491,6 +561,175 @@ export async function executeTask(
     },
     fetchImpl
   );
+}
+
+export async function startProcess(
+  config,
+  accessToken,
+  { userId, assignTo, secureURIExpire, code, entrance, businessId, data, apiVersion = "auto", onAttempt } = {},
+  fetchImpl = fetch
+) {
+  const normalizedApiVersion = `${apiVersion || "auto"}`.toLowerCase();
+  if (!["auto", "v2", "v2d"].includes(normalizedApiVersion)) {
+    throw new Error(`Invalid apiVersion "${apiVersion}". Expected one of: auto, v2, v2d.`);
+  }
+  const form = new URLSearchParams();
+  if (userId) {
+    form.set("userId", userId);
+  }
+  if (assignTo) {
+    form.set("assignTo", assignTo);
+  }
+  if (secureURIExpire !== undefined && secureURIExpire !== null && secureURIExpire !== "") {
+    form.set("secureURIExpire", `${secureURIExpire}`);
+  }
+  if (code) {
+    form.set("code", code);
+  }
+  if (entrance) {
+    form.set("entrance", entrance);
+  }
+  if (businessId) {
+    form.set("businessId", businessId);
+  }
+  if (data !== undefined && data !== null && data !== "") {
+    form.set("data", typeof data === "string" ? data : JSON.stringify(data));
+  }
+
+  const apiVersions = normalizedApiVersion === "auto" ? ["v2", "v2d"] : [normalizedApiVersion];
+  const attempts = [];
+  for (const version of apiVersions) {
+    for (const method of ["PUT", "POST"]) {
+      for (const queryToken of [false, true]) {
+        for (const trailingSlash of [false, true]) {
+          attempts.push({ method, queryToken, trailingSlash, version });
+        }
+      }
+    }
+  }
+  const errors = [];
+
+  for (const attempt of attempts) {
+    const { method, queryToken, trailingSlash, version } = attempt;
+    try {
+      const path = versionedApiUrl(config.baseUrl, version, "process", { trailingSlash });
+      const requestUrl = queryToken
+        ? `${path}?access_token=${encodeURIComponent(accessToken)}`
+        : path;
+      if (typeof onAttempt === "function") {
+        onAttempt({
+          phase: "request",
+          method,
+          version,
+          authMode: queryToken ? "query" : "header",
+          trailingSlash,
+          url: requestUrl.replace(/(access_token=)[^&]+/i, "$1<redacted>")
+        });
+      }
+      const headers = {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded"
+      };
+      if (!queryToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+      const response = await fetchImpl(requestUrl, {
+        method,
+        headers,
+        body: form
+      });
+
+      const payload = await parseResponsePayload(response);
+      const contentType = `${response.headers.get("content-type") || ""}`.toLowerCase();
+      if (typeof onAttempt === "function") {
+        onAttempt({
+          phase: "response",
+          method,
+          version,
+          authMode: queryToken ? "query" : "header",
+          trailingSlash,
+          status: response.status,
+          contentType: response.headers.get("content-type") || "",
+          payloadPreview:
+            typeof payload === "string" ? payload.slice(0, 200) : JSON.stringify(payload).slice(0, 200)
+        });
+      }
+      if (!response.ok) {
+        throw markLoginRequiredIfNeeded(
+          createRequestError(
+            `Failed to start process via ${method} /${version}/process${trailingSlash ? "/" : ""}${queryToken ? " (query token)" : ""} (status=${response.status}, payload=${JSON.stringify(payload)})`,
+            response.status,
+            payload
+          )
+        );
+      }
+
+      if (payload && typeof payload === "object" && typeof payload.errno === "number") {
+        if (payload.errno !== 0) {
+          throw markLoginRequiredIfNeeded(
+            createRequestError(
+              `InfoPlus API error: errno=${payload.errno}, ecode=${payload.ecode || ""}, error=${payload.error || "unknown"}`,
+              response.status,
+              payload
+            )
+          );
+        }
+        if (Array.isArray(payload.entities)) {
+          return payload.entities;
+        }
+      }
+
+      // Compatibility: some gateways return 2xx with empty body.
+      if (
+        payload === null ||
+        payload === undefined ||
+        payload === "" ||
+        (typeof payload === "object" && Object.keys(payload).length === 0)
+      ) {
+        if (contentType.includes("text/html")) {
+          throw new Error("Received empty HTML response from process start endpoint");
+        }
+        return [];
+      }
+
+      if (typeof payload === "string") {
+        if (contentType.includes("text/html")) {
+          throw new Error(`Received HTML response from process start endpoint: ${payload.slice(0, 200)}`);
+        }
+        return [payload];
+      }
+
+      throw new Error(`Invalid InfoPlus response: ${JSON.stringify(payload)}`);
+    } catch (error) {
+      const causeSuffix = error?.cause?.message ? `; cause=${error.cause.message}` : "";
+      const wrapped = new Error(
+        `[${version}:${method}${queryToken ? "+queryToken" : ""}${trailingSlash ? "+slash" : ""}] ${error.message}${causeSuffix}`
+      );
+      wrapped.status = error?.status;
+      wrapped.payload = error?.payload;
+      wrapped.requiresLogin = Boolean(error?.requiresLogin);
+      errors.push(wrapped);
+      if (typeof onAttempt === "function") {
+        onAttempt({
+          phase: "error",
+          method,
+          version,
+          authMode: queryToken ? "query" : "header",
+          trailingSlash,
+          error: wrapped.message
+        });
+      }
+    }
+  }
+
+  if (errors.some((error) => error?.requiresLogin)) {
+    const loginError = new Error("Access token is invalid or expired.");
+    loginError.requiresLogin = true;
+    throw loginError;
+  }
+
+  const details = errors.map((error) => error.message).join(" | ");
+  throw new Error(`Failed to start process via /process. ${details}`);
 }
 
 async function requestFileApi(requestOptions, fetchImpl) {

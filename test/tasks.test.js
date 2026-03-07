@@ -6,6 +6,7 @@ import {
   runTasksDone,
   runTasksExecute,
   runTasksList,
+  runTasksStart,
   runTasksTodo
 } from "../src/commands/tasks.js";
 import { createMemoryKeyring, createWriter, seedAccessToken } from "../test-helpers.js";
@@ -229,6 +230,225 @@ test("runTasksExecute works without username", async () => {
   try {
     const result = await runTasksExecute("task-42", {}, await makeDeps(baseUrl));
     assert.equal(result[0].id, "task-42");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runTasksStart calls PUT /process with start params", async () => {
+  const { server, baseUrl } = await startMockServer({
+    "PUT /infoplus/apis/v2/process": (_req, res, body) => {
+      const params = new URLSearchParams(body);
+      assert.equal(params.get("userId"), "alice");
+      assert.equal(params.get("assignTo"), "bob");
+      assert.equal(params.get("secureURIExpire"), "86400");
+      assert.equal(params.get("code"), "BKQDJ");
+      assert.equal(params.get("entrance"), "apply");
+      assert.equal(params.get("businessId"), "att-2026");
+      assert.equal(params.get("data"), '{"reason":"missing clock"}');
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          errno: 0,
+          entities: ["5017842", "8538510", "https://wf.example/form/8538510/render"]
+        })
+      );
+    }
+  });
+
+  const writer = createWriter();
+  try {
+    const entities = await runTasksStart(
+      {
+        userId: "alice",
+        assignTo: "bob",
+        secureUriExpire: "86400",
+        code: "BKQDJ",
+        entrance: "apply",
+        businessId: "att-2026",
+        data: '{"reason":"missing clock"}',
+        submit: false
+      },
+      await makeDeps(baseUrl, writer)
+    );
+
+    assert.equal(entities[0], "5017842");
+    assert.match(writer.read(), /Process started successfully\. entry=5017842/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runTasksStart prints next execute hint with task id from start response detail", async () => {
+  const taskDetail = {
+    code: "SQR",
+    id: "bf99236d-ee61-4b0d-a7e4-926f9c8e50ab",
+    stepId: 8539959
+  };
+  const { server, baseUrl } = await startMockServer({
+    "PUT /infoplus/apis/v2/process": (_req, res) => {
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          errno: 0,
+          entities: [
+            "5018725",
+            "8539959",
+            "https://wf.example/form/8539959/render",
+            JSON.stringify(taskDetail)
+          ]
+        })
+      );
+    }
+  });
+
+  const writer = createWriter();
+  try {
+    await runTasksStart({ code: "BKQ", submit: false }, await makeDeps(baseUrl, writer));
+    assert.match(writer.read(), /Next: wfcli tasks execute bf99236d-ee61-4b0d-a7e4-926f9c8e50ab --action-code TJ/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runTasksStart can auto-submit started task by id from response detail", async () => {
+  let submitted = false;
+  const taskDetail = {
+    code: "SQR",
+    id: "bf99236d-ee61-4b0d-a7e4-926f9c8e50ab",
+    stepId: 8539959
+  };
+  const { server, baseUrl } = await startMockServer({
+    "PUT /infoplus/apis/v2/process": (_req, res) => {
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          errno: 0,
+          entities: [
+            "5018725",
+            "8539959",
+            "https://wf.example/form/8539959/render",
+            JSON.stringify(taskDetail)
+          ]
+        })
+      );
+    },
+    "POST /infoplus/apis/v2/task/bf99236d-ee61-4b0d-a7e4-926f9c8e50ab": (_req, res, body) => {
+      submitted = true;
+      const params = new URLSearchParams(body);
+      assert.equal(params.get("userId"), "993333");
+      assert.equal(params.get("actionCode"), "TJ");
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ errno: 0, entities: [{ ok: true }] }));
+    }
+  });
+
+  const writer = createWriter();
+  try {
+    await runTasksStart({ code: "BKQ", userId: "993333", submit: true, submitActionCode: "TJ" }, await makeDeps(baseUrl, writer));
+    assert.equal(submitted, true);
+    assert.match(writer.read(), /Start task submitted successfully\./);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runTasksStart falls back to POST /process when PUT fails", async () => {
+  let count = 0;
+  const { server, baseUrl } = await startMockServer({
+    "PUT /infoplus/apis/v2/process": (_req, res) => {
+      count += 1;
+      res.statusCode = 405;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ errno: 405, ecode: "METHOD_NOT_ALLOWED", error: "METHOD_NOT_ALLOWED" }));
+    },
+    "POST /infoplus/apis/v2/process": (_req, res, body) => {
+      count += 1;
+      const params = new URLSearchParams(body);
+      assert.equal(params.get("code"), "BKQ");
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ errno: 0, entities: ["5017999", "9001", "https://wf.example/form/9001/render"] }));
+    }
+  });
+
+  try {
+    const entities = await runTasksStart({ code: "BKQ", submit: false }, await makeDeps(baseUrl));
+    assert.equal(entities[0], "5017999");
+    assert.equal(count, 2);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runTasksStart accepts empty 2xx response as compatibility success", async () => {
+  const { server, baseUrl } = await startMockServer({
+    "PUT /infoplus/apis/v2/process": (_req, res) => {
+      res.statusCode = 200;
+      res.end("");
+    }
+  });
+
+  const writer = createWriter();
+  try {
+    const entities = await runTasksStart({ code: "BKQ", submit: false }, await makeDeps(baseUrl, writer));
+    assert.deepEqual(entities, []);
+    assert.match(writer.read(), /API returned empty response/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runTasksStart falls back to query access_token when auth header path fails", async () => {
+  let count = 0;
+  const { server, baseUrl } = await startMockServer({
+    "PUT /infoplus/apis/v2/process": (_req, res) => {
+      count += 1;
+      res.statusCode = 401;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ errno: 401, ecode: "UNAUTHORIZED", error: "UNAUTHORIZED" }));
+    },
+    "POST /infoplus/apis/v2/process": (_req, res) => {
+      count += 1;
+      res.statusCode = 401;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ errno: 401, ecode: "UNAUTHORIZED", error: "UNAUTHORIZED" }));
+    },
+    "PUT /infoplus/apis/v2/process?access_token=shared-token": (_req, res) => {
+      count += 1;
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ errno: 0, entities: ["5020001", "9002", "https://wf.example/form/9002/render"] }));
+    }
+  });
+
+  try {
+    const entities = await runTasksStart({ code: "BKQ", submit: false }, await makeDeps(baseUrl));
+    assert.equal(entities[0], "5020001");
+    assert.equal(count, 2);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runTasksStart prompts login when token is invalid", async () => {
+  const { server, baseUrl } = await startMockServer({
+    "PUT /infoplus/apis/v2/process": (_req, res) => {
+      res.statusCode = 401;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ecode: "ACCESS_TOKEN_EXPIRED", error: "ACCESS_TOKEN_EXPIRED" }));
+    }
+  });
+
+  try {
+    await assert.rejects(
+      runTasksStart({ submit: false }, await makeDeps(baseUrl)),
+      /Access token is invalid or expired/
+    );
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

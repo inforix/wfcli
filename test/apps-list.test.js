@@ -1,7 +1,7 @@
 import http from "node:http";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runAppsList } from "../src/commands/apps.js";
+import { runAppsDefinition, runAppsList } from "../src/commands/apps.js";
 import { createMemoryKeyring, createWriter, seedAccessToken } from "../test-helpers.js";
 
 function startMockServer(routes) {
@@ -171,6 +171,95 @@ test("runAppsList prompts login when access token is invalid", async () => {
     await seedAccessToken(keyring, { baseUrl, clientId: "cid" }, "token123");
     await assert.rejects(
       runAppsList(
+        {},
+        {
+          writer: createWriter(),
+          keyring,
+          env: {
+            WORKFLOW_CLIENT_ID: "cid",
+            WORKFLOW_BASE_URL: baseUrl
+          }
+        }
+      ),
+      /scope is invalid/
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runAppsDefinition fetches app schema with includeDefinition=true by default", async () => {
+  const { server, baseUrl } = await startMockServer({
+    "GET /infoplus/apis/v2/app/BKQDJ?includeDefinition=true": (req, res) => {
+      assert.equal(req.headers.authorization, "Bearer token123");
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          errno: 0,
+          entities: [
+            {
+              code: "BKQDJ",
+              name: "补考勤登记",
+              currentVersion: {
+                schema: {
+                  fields: [{ code: "reason", name: "补签原因", type: "string" }]
+                }
+              }
+            }
+          ]
+        })
+      );
+    }
+  });
+
+  const writer = createWriter();
+  const keyring = createMemoryKeyring();
+  try {
+    await seedAccessToken(keyring, { baseUrl, clientId: "cid" }, "token123");
+    const app = await runAppsDefinition(
+      "BKQDJ",
+      {},
+      {
+        writer,
+        keyring,
+        env: {
+          WORKFLOW_CLIENT_ID: "cid",
+          WORKFLOW_BASE_URL: baseUrl
+        }
+      }
+    );
+
+    assert.equal(app.code, "BKQDJ");
+    const parsed = JSON.parse(writer.read());
+    assert.equal(parsed.currentVersion.schema.fields[0].code, "reason");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runAppsDefinition prompts login when access token is invalid", async () => {
+  const { server, baseUrl } = await startMockServer({
+    "GET /infoplus/apis/v2/app/BKQDJ?includeDefinition=true": (_req, res) => {
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          errno: 10010,
+          ecode: "ACCESS_TOKEN_SCOPE_INVALID",
+          error: "ACCESS_TOKEN_SCOPE_INVALID",
+          entities: []
+        })
+      );
+    }
+  });
+
+  try {
+    const keyring = createMemoryKeyring();
+    await seedAccessToken(keyring, { baseUrl, clientId: "cid" }, "token123");
+    await assert.rejects(
+      runAppsDefinition(
+        "BKQDJ",
         {},
         {
           writer: createWriter(),

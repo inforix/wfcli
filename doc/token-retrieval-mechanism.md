@@ -16,6 +16,8 @@ Flow:
    - `WORKFLOW_CLIENT_SECRET`
    - `WORKFLOW_BASE_URL`
    - `WORKFLOW_AUTH_SCOPE` (optional)
+   - `WORKFLOW_SCOPE` (optional fallback)
+   - default: `profile data openid app process task start process_edit app_edit`
 2. Start local callback HTTP server on `127.0.0.1:<random-port>/oauth/callback`.
 3. Build authorize URL with:
    - `response_type=code`
@@ -66,6 +68,7 @@ Flow:
    - token is expired (with 30s skew safety window)
 4. If token is valid, commands call InfoPlus APIs with `Authorization: Bearer <token>`.
    - Read-style task APIs use `/infoplus/apis/v2/me/...` and do not require `--username`.
+   - `tasks start` maps to `PUT /infoplus/apis/v2/process`.
    - `tasks execute` maps to `POST /infoplus/apis/v2/task/{id}`; `userId` is optional (can come from `--username` or `WORKFLOW_USERNAME`).
 5. If API returns token-related errors (e.g. access token invalid/expired/scope mismatch), command maps it to a login hint error.
 

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import http from "node:http";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { resolveAuthLoginConfig } from "../config.js";
+import { resolveAuthLoginConfig, resolveRuntimeConfig } from "../config.js";
 import {
   buildAuthorizationCodeUrl,
   exchangeAuthorizationCode,
@@ -213,6 +213,40 @@ export async function runAuthRefreshToken(options, deps = {}) {
   return session;
 }
 
+export async function runAuthShowToken(options, deps = {}) {
+  const writer = deps.writer || process.stdout;
+  const env = deps.env || process.env;
+  const keyring = deps.keyring || getDefaultKeyring();
+  const nowMs = deps.nowMs ?? Date.now();
+
+  const config = resolveRuntimeConfig(options, env);
+  const session = await loadOAuthSession(config, keyring);
+  if (!session) {
+    throw new Error('No OAuth session found in keyring. Run "wfcli auth login" first.');
+  }
+
+  if (options.json) {
+    writer.write(
+      `${JSON.stringify(
+        {
+          accessToken: session.accessToken,
+          tokenType: session.tokenType,
+          scope: session.scope,
+          obtainedAt: session.obtainedAt,
+          expiresAt: session.expiresAt,
+          expired: Boolean(session.expiresAt && session.expiresAt <= nowMs)
+        },
+        null,
+        2
+      )}\n`
+    );
+  } else {
+    writer.write(`${session.accessToken}\n`);
+  }
+
+  return session.accessToken;
+}
+
 export function registerAuthCommands(program) {
   const authCommand = program.command("auth").description("Authentication commands");
 
@@ -222,7 +256,7 @@ export function registerAuthCommands(program) {
     .option("--base-url <url>", "override WORKFLOW_BASE_URL")
     .option(
       "--scope <scope>",
-      "override OAuth scope (default: app+task+process+data+openid+profile)"
+      'override OAuth scope (default: "profile data openid app process task start process_edit app_edit")'
     )
     .action(async (options) => {
       await runAuthLogin(options);
@@ -234,5 +268,14 @@ export function registerAuthCommands(program) {
     .option("--base-url <url>", "override WORKFLOW_BASE_URL")
     .action(async (options) => {
       await runAuthRefreshToken(options);
+    });
+
+  authCommand
+    .command("show-token")
+    .description("Show access token stored in keyring for current WORKFLOW_BASE_URL + WORKFLOW_CLIENT_ID")
+    .option("--base-url <url>", "override WORKFLOW_BASE_URL")
+    .option("--json", "print token metadata as JSON")
+    .action(async (options) => {
+      await runAuthShowToken(options);
     });
 }

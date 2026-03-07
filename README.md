@@ -10,12 +10,14 @@ Implemented command:
 - `wfcli auth refresh-token`
 - `wfcli version`
 - `wfcli apps list`
+- `wfcli apps definition <idc>`
 - `wfcli file upload <path>`
 - `wfcli file update <fileKey> <path>`
 - `wfcli file meta <fileKey>`
 - `wfcli file delete <fileKey>`
 - `wfcli file download <fileKey>`
 - `wfcli tasks todo`
+- `wfcli tasks start`
 - `wfcli tasks execute <taskId>`
 - `wfcli tasks doing`
 - `wfcli tasks done`
@@ -54,7 +56,9 @@ Required for `wfcli auth login`:
 
 Optional:
 
-- `WORKFLOW_AUTH_SCOPE` (default: `app+task+process+data+openid+profile`)
+- `WORKFLOW_AUTH_SCOPE` (optional; overrides login scope)
+- `WORKFLOW_SCOPE` (optional; used as login scope fallback and runtime scope)
+  - default when neither is set: `profile data openid app process task start process_edit app_edit`
 - `WORKFLOW_USERNAME` (optional default `userId` for `wfcli tasks execute`)
 
 ## Usage
@@ -66,8 +70,15 @@ npx wfcli auth login
 # Refresh access token using stored refresh_token
 npx wfcli auth refresh-token
 
+# Show stored access token
+npx wfcli auth show-token
+npx wfcli auth show-token --json
+
 # List current user's apps (from personal token)
 npx wfcli apps list
+
+# Get app definition (schema/fields) for building tasks start --data
+npx wfcli apps definition BKQDJ > bkqdj-definition.json
 
 # Override base url
 npx wfcli apps list --base-url https://xjtu.shmtu.edu.cn
@@ -93,6 +104,16 @@ npx wfcli tasks todo
 npx wfcli tasks doing
 npx wfcli tasks done
 npx wfcli tasks list
+# start maps to [3.2] /process (auto tries v2 + v2d, header/query token, with debug trace)
+npx wfcli tasks start --code BKQDJ --data '{"reason":"补考勤"}'
+npx wfcli tasks start --code BKQ --api-version v2d --debug --data '{"groupBDJXX":[{"fieldXH":"1"}]}'
+# by default, tasks start auto-submits the created start task via /task/{id}
+npx wfcli tasks start --code BKQ --submit-action-code TJ --data '{"groupBDJXX":[{"fieldXH":"1"}]}'
+# create draft only (do not submit)
+npx wfcli tasks start --code BKQ --no-submit --data '{"groupBDJXX":[{"fieldXH":"1"}]}'
+
+# Way 3: inspect field definitions first, then fill --data with field codes
+npx wfcli apps definition BKQDJ | jq '.currentVersion.schema.fields'
 # execute maps to [3.1] POST /task/{id}
 npx wfcli tasks execute 123456 --username alice
 npx wfcli tasks execute 123456 --action-code approve --remark "已确认"
@@ -109,7 +130,7 @@ npx wfcli tasks execute "$TASK_ID" --action-code approve --remark "已处理"
 - starts a local callback server with generated `redirect_uri` on `127.0.0.1`
 - opens browser to `GET /infoplus/oauth2/authorize`
   - `response_type=code`
-  - `scope=app+task+process+data+openid+profile` (or `WORKFLOW_AUTH_SCOPE`)
+  - `scope=profile+data+openid+app+process+task+start+process_edit+app_edit` (or `.env` `WORKFLOW_AUTH_SCOPE` / `WORKFLOW_SCOPE`)
 - receives `code` on callback, then exchanges it via:
 - `POST /infoplus/oauth2/token`
 - saves `access_token` into OS keyring
@@ -122,7 +143,8 @@ npx wfcli tasks execute "$TASK_ID" --action-code approve --remark "已处理"
 - `GET /infoplus/apis/v2/me/processes/doing`
 - `GET /infoplus/apis/v2/me/processes/done`
 - `GET /infoplus/apis/v2/me/processes/completed`
-- `POST /infoplus/apis/v2/tasks/{id}` (fallback: `/task/{id}`)
+- `PUT /infoplus/apis/v2/process` and `PUT /infoplus/apis/v2d/process` (start, auto fallback)
+- `POST /infoplus/apis/v2/task/{id}` (execute)
 - `POST /infoplus/file` (upload)
 - `GET /infoplus/file/{fileKey}/meta`
 - `GET /infoplus/file/{fileKey}/download`

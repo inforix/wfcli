@@ -1,3 +1,6 @@
+export const DEFAULT_OAUTH_SCOPE =
+  "profile data openid app process task start process_edit app_edit";
+
 function normalizeBaseUrl(baseUrl) {
   return baseUrl ? baseUrl.replace(/\/+$/, "") : "";
 }
@@ -26,7 +29,7 @@ function collectRuntimeBaseConfig(options = {}, env = process.env) {
 
 export function resolveRuntimeConfig(options = {}, env = process.env) {
   const { clientId, baseUrl } = collectRuntimeBaseConfig(options, env);
-  const scope = options.scope || env.WORKFLOW_SCOPE || "sys_app";
+  const scope = options.scope || env.WORKFLOW_SCOPE || DEFAULT_OAUTH_SCOPE;
   const username = options.username || env.WORKFLOW_USERNAME;
 
   return {
@@ -43,7 +46,11 @@ export function resolveAuthLoginConfig(options = {}, env = process.env) {
   if (!clientSecret) {
     throw new Error("Missing required environment variables: WORKFLOW_CLIENT_SECRET");
   }
-  const scope = options.scope || env.WORKFLOW_AUTH_SCOPE || "app+task+process+data+openid+profile";
+  const scope =
+    options.scope ||
+    env.WORKFLOW_AUTH_SCOPE ||
+    env.WORKFLOW_SCOPE ||
+    DEFAULT_OAUTH_SCOPE;
 
   return {
     clientId,

@@ -37,8 +37,14 @@ test("runAuthLogin completes authorization code flow and stores keyring token", 
     "GET /infoplus/oauth2/authorize": (req, res) => {
       const url = new URL(req.url, baseUrl);
       assert.equal(url.searchParams.get("response_type"), "code");
-      assert.match(req.url, /(?:\?|&)scope=app\+task\+process\+data\+openid\+profile(?:&|$)/);
-      assert.equal(url.searchParams.get("scope"), "app task process data openid profile");
+      assert.match(
+        req.url,
+        /(?:\?|&)scope=profile\+data\+openid\+app\+process\+task\+start\+process_edit\+app_edit(?:&|$)/
+      );
+      assert.equal(
+        url.searchParams.get("scope"),
+        "profile data openid app process task start process_edit app_edit"
+      );
       const redirectUri = url.searchParams.get("redirect_uri");
       const state = url.searchParams.get("state");
       res.statusCode = 302;

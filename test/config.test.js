@@ -23,18 +23,46 @@ test("resolveRuntimeConfig resolves values from env and options", () => {
   assert.equal(config.username, "alice");
 });
 
-test("resolveAuthLoginConfig uses login scope defaults", () => {
+test("resolveAuthLoginConfig reads scope from WORKFLOW_SCOPE in env", () => {
   const config = resolveAuthLoginConfig(
     {},
     {
       WORKFLOW_CLIENT_ID: "cid",
       WORKFLOW_CLIENT_SECRET: "csec",
       WORKFLOW_BASE_URL: "https://example.com",
-      WORKFLOW_SCOPE: "sys_app"
+      WORKFLOW_SCOPE: "profile data openid app process task start process_edit app_edit"
     }
   );
 
-  assert.equal(config.scope, "app+task+process+data+openid+profile");
+  assert.equal(config.scope, "profile data openid app process task start process_edit app_edit");
+});
+
+test("resolveAuthLoginConfig prefers WORKFLOW_AUTH_SCOPE over WORKFLOW_SCOPE", () => {
+  const config = resolveAuthLoginConfig(
+    {},
+    {
+      WORKFLOW_CLIENT_ID: "cid",
+      WORKFLOW_CLIENT_SECRET: "csec",
+      WORKFLOW_BASE_URL: "https://example.com",
+      WORKFLOW_SCOPE: "scope-a",
+      WORKFLOW_AUTH_SCOPE: "scope-b"
+    }
+  );
+
+  assert.equal(config.scope, "scope-b");
+});
+
+test("resolveAuthLoginConfig uses default scope when env scope is missing", () => {
+  const config = resolveAuthLoginConfig(
+    {},
+    {
+      WORKFLOW_CLIENT_ID: "cid",
+      WORKFLOW_CLIENT_SECRET: "csec",
+      WORKFLOW_BASE_URL: "https://example.com"
+    }
+  );
+
+  assert.equal(config.scope, "profile data openid app process task start process_edit app_edit");
 });
 
 test("resolveAuthLoginConfig requires client secret", () => {

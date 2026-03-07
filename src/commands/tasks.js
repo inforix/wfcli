@@ -5,7 +5,8 @@ import {
   fetchMyCompletedProcesses,
   fetchMyDoingProcesses,
   fetchMyDoneProcesses,
-  fetchMyTodoTasks
+  fetchMyTodoTasks,
+  startProcess
 } from "../infoplusClient.js";
 import { getDefaultKeyring } from "../keyring.js";
 import { renderTable } from "../output.js";
@@ -42,7 +43,7 @@ function toLoginHintError(error) {
     const ecode = `${error?.payload?.ecode || error?.payload?.error || ""}`.toUpperCase();
     if (ecode.includes("SCOPE")) {
       return new Error(
-        'Access token scope is invalid. Run "wfcli auth login --scope app+task+process+data+openid+profile" and retry.'
+        'Access token scope is invalid. Run `wfcli auth login --scope "profile data openid app process task start process_edit app_edit"` and retry.'
       );
     }
     return new Error('Access token is invalid or expired. Run "wfcli auth login" and retry.');
@@ -260,6 +261,160 @@ export async function runTasksExecute(taskId, options, deps = {}) {
   return entities;
 }
 
+function parseJsonOption(value, optionName) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    return value;
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new Error(`Invalid ${optionName} JSON. Example: --data '{"field":"value"}'`);
+  }
+}
+
+function parseStartDetail(entities) {
+  if (!Array.isArray(entities) || entities.length < 4) {
+    return null;
+  }
+  const raw = entities[3];
+  if (raw === null || raw === undefined || raw === "") {
+    return null;
+  }
+  if (typeof raw === "object") {
+    return raw;
+  }
+  if (typeof raw !== "string") {
+    return null;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function resolveStartTaskId(entities, overrideTaskId) {
+  if (overrideTaskId) {
+    return `${overrideTaskId}`;
+  }
+  const detail = parseStartDetail(entities);
+  const detailId = detail?.id || detail?.taskId || detail?.task?.id;
+  if (detailId) {
+    return `${detailId}`;
+  }
+  const stepId = entities?.[1];
+  if (stepId !== undefined && stepId !== null && `${stepId}` !== "") {
+    return `${stepId}`;
+  }
+  return null;
+}
+
+export async function runTasksStart(options, deps = {}) {
+  const { fetchImpl, writer, keyring, config } = resolveTaskCommandContext(options, deps);
+  const accessToken = await fetchTokenForCommand(config, keyring);
+  let entities;
+  const startInput = {
+    userId: options.userId || config.username,
+    assignTo: options.assignTo,
+    secureURIExpire: options.secureUriExpire,
+    code: options.code,
+    entrance: options.entrance,
+    businessId: options.businessId,
+    data: parseJsonOption(options.data, "--data"),
+    apiVersion: options.apiVersion || "auto"
+  };
+  try {
+    if (options.debug) {
+      writer.write(`[debug] tasks.start input: ${JSON.stringify(startInput)}\n`);
+      startInput.onAttempt = (event) => {
+        writer.write(`[debug] tasks.start attempt: ${JSON.stringify(event)}\n`);
+      };
+    }
+    entities = await startProcess(config, accessToken, startInput, fetchImpl);
+  } catch (error) {
+    if (!options.debug && `${error?.message || ""}`.includes("fetch failed")) {
+      throw new Error(
+        'Failed to call process start API. Check WORKFLOW_BASE_URL/network/VPN and retry.'
+      );
+    }
+    if (options.debug) {
+      writer.write(`[debug] tasks.start error: ${error.message}\n`);
+    }
+    throw toLoginHintError(error);
+  }
+
+  const shouldSubmit = options.submit !== false;
+  let submitTaskId = null;
+  let submitEntities = null;
+  if (shouldSubmit) {
+    submitTaskId = resolveStartTaskId(entities, options.submitTaskId);
+    if (!submitTaskId) {
+      throw new Error(
+        "Process started but cannot resolve task id from start response. Retry with --submit-task-id <id>."
+      );
+    }
+    try {
+      submitEntities = await executeTask(
+        config,
+        submitTaskId,
+        accessToken,
+        {
+          userId: options.userId || config.username,
+          actionCode: options.submitActionCode
+        },
+        fetchImpl
+      );
+    } catch (error) {
+      throw toLoginHintError(error);
+    }
+  }
+
+  if (options.json) {
+    if (shouldSubmit) {
+      writer.write(
+        `${JSON.stringify(
+          {
+            start: entities,
+            submitTaskId,
+            submit: submitEntities
+          },
+          null,
+          2
+        )}\n`
+      );
+    } else {
+      writer.write(`${JSON.stringify(entities, null, 2)}\n`);
+    }
+  } else {
+    const entry = entities?.[0] ?? "unknown";
+    const firstTaskUrl = entities?.[2];
+    if (entities.length === 0) {
+      writer.write(
+        "Process start request sent successfully, but API returned empty response. Please run `wfcli tasks doing` to verify the new process.\n"
+      );
+    } else {
+      writer.write(
+        `Process started successfully. entry=${entry}${firstTaskUrl ? ` url=${firstTaskUrl}` : ""}\n`
+      );
+      const hintedTaskId = resolveStartTaskId(entities, null);
+      if (shouldSubmit) {
+        writer.write(
+          `Start task submitted successfully. taskId=${submitTaskId}${
+            options.submitActionCode ? ` actionCode=${options.submitActionCode}` : ""
+          }\n`
+        );
+      } else if (hintedTaskId) {
+        writer.write(`Next: wfcli tasks execute ${hintedTaskId} --action-code TJ\n`);
+      }
+    }
+  }
+
+  return entities;
+}
+
 function addCommonOptions(command) {
   return command
     .option("--base-url <url>", "override WORKFLOW_BASE_URL")
@@ -300,5 +455,22 @@ export function registerTasksCommands(program) {
     .option("--pickup <code>", "optional pickup code")
     .action(async (taskId, options) => {
       await runTasksExecute(taskId, options);
+    });
+
+  addCommonOptions(tasksCommand.command("start").description("Start a new process"))
+    .option("--user-id <id>", "optional process owner userId (defaults to WORKFLOW_USERNAME)")
+    .option("--assign-to <id>", "optional first-step assignee userId")
+    .option("--secure-uri-expire <seconds>", "optional secure URI expire seconds")
+    .option("--code <code>", "optional workflow code when required by app")
+    .option("--entrance <code>", "optional workflow entrance code for multi-entrance process")
+    .option("--business-id <id>", "optional business object id")
+    .option("--api-version <version>", "process API version: auto | v2 | v2d", "auto")
+    .option("--data <json>", "optional initial process data as JSON string")
+    .option("--no-submit", "do not auto submit; keep draft at start step")
+    .option("--submit-task-id <id>", "override task id used by --submit")
+    .option("--submit-action-code <code>", "optional actionCode for --submit (example: TJ)")
+    .option("--debug", "print start request debug details")
+    .action(async (options) => {
+      await runTasksStart(options);
     });
 }

@@ -60,9 +60,9 @@ Server returns scope errors such as `ACCESS_TOKEN_SCOPE_INVALID`.
 Action:
 
 1. Re-login with required scope, for example:
-   - `wfcli auth login --scope app+task+process+data+openid+profile`
+   - `wfcli auth login --scope "profile data openid app process task start process_edit app_edit"`
 2. Confirm your environment scope if needed:
-   - `.env` -> `WORKFLOW_AUTH_SCOPE`
+   - `.env` -> `WORKFLOW_AUTH_SCOPE` (preferred) or `WORKFLOW_SCOPE` (fallback)
 
 Note:
 

@@ -16,7 +16,7 @@ function toLoginHintError(error) {
     const ecode = `${error?.payload?.ecode || error?.payload?.error || ""}`.toUpperCase();
     if (ecode.includes("SCOPE")) {
       return new Error(
-        'Access token scope is invalid. Run "wfcli auth login --scope app+task+process+data+openid+profile" and retry.'
+        'Access token scope is invalid. Run `wfcli auth login --scope "profile data openid app process task start process_edit app_edit"` and retry.'
       );
     }
     return new Error('Access token is invalid or expired. Run "wfcli auth login" and retry.');
