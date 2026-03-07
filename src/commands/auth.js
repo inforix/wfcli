@@ -129,7 +129,16 @@ function formatExpiry(expiresAt) {
   if (!expiresAt) {
     return "unknown";
   }
-  return new Date(expiresAt).toISOString();
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZoneName: "short"
+  }).format(new Date(expiresAt));
 }
 
 export async function runAuthLogin(options, deps = {}) {
