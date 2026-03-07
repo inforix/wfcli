@@ -23,6 +23,21 @@ npm install
 cp .env.example .env
 ```
 
+## Automatic npm publish on push
+
+This repo is configured to publish to npm on every push to `main` via GitHub Actions.
+
+Required GitHub repository secret:
+
+- `NPM_TOKEN`: npm automation token with publish permission for this package
+
+The workflow automatically:
+
+- bumps patch version (`npm version patch`)
+- creates a git tag
+- publishes to npm
+- pushes commit and tag back to `main`
+
 Set these values in `.env`:
 
 - `WORKFLOW_CLIENT_ID`

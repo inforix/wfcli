@@ -6,6 +6,10 @@
   "bin": {
     "wfcli": "src/cli.js"
   },
+  "files": [
+    "src",
+    "README.md"
+  ],
   "scripts": {
     "test": "node --test"
   },
@@ -13,6 +17,10 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "dependencies": {
     "commander": "^14.0.3",
     "dotenv": "^17.3.1"
