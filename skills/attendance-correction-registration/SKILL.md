@@ -34,7 +34,16 @@ npx wfcli apps definition BKQ | jq '.currentVersion.schema.fields'
 ```
 - Build `--data` using **field codes** from schema output.
 
-4. Start attendance correction process
+4. get user profile and department
+
+you can use `npx wfcli user profile` to get user profile info, `npx wfcli user department` to get department info, including department and name, which are needed for the process data payload.
+
+<bm>: 部门代码
+<bm_name>: 部门名称
+<gh>: 申请人工号
+<xm>: 申请人姓名
+
+5. Start attendance correction process
 
 <reason>: if user doesn't specify the reason, then set a default value like "正常上班，漏考勤" to ensure the process can be started without validation errors.
 
@@ -42,10 +51,6 @@ npx wfcli apps definition BKQ | jq '.currentVersion.schema.fields'
 
 <location>: if user doesn't specify the location, then set a default value like "临港校区" to ensure the process can be started without validation errors.
 
-<bm>: 部门代码
-<bm_name>: 部门名称
-<gh>: 申请人工号
-<xm>: 申请人姓名
 <sqrq>: 申请日期（unixtime long, in seconds, not milliseconds）
 
 ```bash
