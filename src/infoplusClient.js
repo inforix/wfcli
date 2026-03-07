@@ -6,6 +6,14 @@ function appsUrl(baseUrl, username) {
   return `${baseUrl}/infoplus/apis/v2/user/${encodeURIComponent(username)}/apps`;
 }
 
+function userScopedApiUrl(baseUrl, username, path) {
+  return `${baseUrl}/infoplus/apis/v2/user/${encodeURIComponent(username)}/${path}`;
+}
+
+function apiUrl(baseUrl, path) {
+  return `${baseUrl}/infoplus/apis/v2/${path}`;
+}
+
 function toBasicAuth(clientId, clientSecret) {
   const credential = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   return `Basic ${credential}`;
@@ -129,4 +137,126 @@ export async function fetchUserApps(config, username, accessToken, fetchImpl = f
   }
 
   return payload.entities;
+}
+
+async function requestInfoPlusEntities(requestOptions, fetchImpl) {
+  const { url, method, accessToken, body, errorContext } = requestOptions;
+
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: "application/json"
+  };
+  if (body) {
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+  }
+
+  const response = await fetchImpl(url, {
+    method,
+    headers,
+    body
+  });
+
+  const payload = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const error = new Error(
+      `${errorContext} (status=${response.status}, payload=${JSON.stringify(payload)})`
+    );
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
+  }
+
+  if (typeof payload.errno !== "number") {
+    throw new Error(`Invalid InfoPlus response: ${JSON.stringify(payload)}`);
+  }
+
+  if (payload.errno !== 0) {
+    const error = new Error(
+      `InfoPlus API error: errno=${payload.errno}, ecode=${payload.ecode || ""}, error=${payload.error || "unknown"}`
+    );
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
+  }
+
+  if (!Array.isArray(payload.entities)) {
+    throw new Error(`Invalid InfoPlus response: entities is not an array`);
+  }
+
+  return payload.entities;
+}
+
+export async function fetchUserTodoTasks(config, username, accessToken, fetchImpl = fetch) {
+  return requestInfoPlusEntities(
+    {
+      url: userScopedApiUrl(config.baseUrl, username, "tasks/todo"),
+      method: "GET",
+      accessToken,
+      errorContext: `Failed to fetch todo tasks for user "${username}"`
+    },
+    fetchImpl
+  );
+}
+
+export async function fetchUserDoingProcesses(config, username, accessToken, fetchImpl = fetch) {
+  return requestInfoPlusEntities(
+    {
+      url: userScopedApiUrl(config.baseUrl, username, "processes/doing"),
+      method: "GET",
+      accessToken,
+      errorContext: `Failed to fetch doing processes for user "${username}"`
+    },
+    fetchImpl
+  );
+}
+
+export async function fetchUserDoneProcesses(config, username, accessToken, fetchImpl = fetch) {
+  return requestInfoPlusEntities(
+    {
+      url: userScopedApiUrl(config.baseUrl, username, "processes/done"),
+      method: "GET",
+      accessToken,
+      errorContext: `Failed to fetch done processes for user "${username}"`
+    },
+    fetchImpl
+  );
+}
+
+export async function fetchUserCompletedProcesses(config, username, accessToken, fetchImpl = fetch) {
+  return requestInfoPlusEntities(
+    {
+      url: userScopedApiUrl(config.baseUrl, username, "processes/completed"),
+      method: "GET",
+      accessToken,
+      errorContext: `Failed to fetch completed processes for user "${username}"`
+    },
+    fetchImpl
+  );
+}
+
+export async function executeTask(config, username, taskId, accessToken, fetchImpl = fetch) {
+  const encodedTaskId = encodeURIComponent(taskId);
+  const candidates = [`tasks/${encodedTaskId}`, `task/${encodedTaskId}`];
+  const errors = [];
+
+  for (const candidatePath of candidates) {
+    try {
+      return await requestInfoPlusEntities(
+        {
+          url: apiUrl(config.baseUrl, candidatePath),
+          method: "POST",
+          accessToken,
+          body: new URLSearchParams({ userId: username }),
+          errorContext: `Failed to execute task "${taskId}" via /${candidatePath}`
+        },
+        fetchImpl
+      );
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  const details = errors.map((error) => error.message).join(" | ");
+  throw new Error(`Failed to execute task "${taskId}". ${details}`);
 }

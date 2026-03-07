@@ -7,6 +7,11 @@ Workflow CLI for SHMTU InfoPlus.
 Implemented command:
 
 - `wfcli apps list`
+- `wfcli tasks todo`
+- `wfcli tasks execute <taskId>`
+- `wfcli tasks doing`
+- `wfcli tasks done`
+- `wfcli tasks list`
 
 ## Setup
 
@@ -40,6 +45,13 @@ npx wfcli apps list --username alice --base-url https://xjtu.shmtu.edu.cn
 
 # Machine-readable output
 npx wfcli apps list --username alice --json
+
+# Task commands
+npx wfcli tasks todo --username alice
+npx wfcli tasks doing --username alice
+npx wfcli tasks done --username alice
+npx wfcli tasks list --username alice
+npx wfcli tasks execute 123456 --username alice
 ```
 
 ## OAuth2 flow
@@ -49,5 +61,10 @@ npx wfcli apps list --username alice --json
 - `POST /infoplus/oauth2/token`
 - then calls:
   - `GET /infoplus/apis/v2/user/{username}/apps`
+  - `GET /infoplus/apis/v2/user/{username}/tasks/todo`
+  - `GET /infoplus/apis/v2/user/{username}/processes/doing`
+  - `GET /infoplus/apis/v2/user/{username}/processes/done`
+  - `GET /infoplus/apis/v2/user/{username}/processes/completed`
+  - `POST /infoplus/apis/v2/tasks/{id}` (fallback: `/task/{id}`)
 
 If Basic client auth is rejected by the server, it retries with `client_id` and `client_secret` in the form body.
