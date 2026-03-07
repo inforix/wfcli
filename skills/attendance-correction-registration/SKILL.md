@@ -42,8 +42,14 @@ npx wfcli apps definition BKQ | jq '.currentVersion.schema.fields'
 
 <location>: if user doesn't specify the location, then set a default value like "临港校区" to ensure the process can be started without validation errors.
 
+<bm>: 部门代码
+<bm_name>: 部门名称
+<gh>: 申请人工号
+<xm>: 申请人姓名
+<sqrq>: 申请日期（unixtime long, in seconds, not milliseconds）
+
 ```bash
-npx wfcli tasks start --code BKQ --data '{"groupBDJXX":[{"fieldXH":"1", "fieldBDJRQ": "<correction_date>", "fieldBDJRGZQK":"<reason>", "fieldKQQY":"<location>"}, "fieldKQQY_Name":"<location>"}]}'
+npx wfcli tasks start --code BKQ --submit-action-code "Submit" --data '{"fieldBM": "<bm>", "fieldBM_Name": "<bm_name>", "fieldGH": "<gh>", "fieldXM": "<xm>", "fieldSQRQ": <sqrq>, "fieldXH":["1"], "fieldBDJRQ": [<correction_date>], "fieldBDJRGZQK":["<reason>"], "fieldKQQY":["<location>"], "fieldKQQY_Name":["<location>"]}'
 ```
 
 
