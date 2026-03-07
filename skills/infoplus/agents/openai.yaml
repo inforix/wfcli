@@ -1,0 +1,4 @@
+interface:
+  display_name: "InfoPlus CLI"
+  short_description: "Use wfcli for SHMTU InfoPlus workflows"
+  default_prompt: "Use this skill to introduce and operate wfcli for InfoPlus auth, app metadata, tasks, and file APIs."
