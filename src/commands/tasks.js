@@ -2,10 +2,10 @@ import { resolveRuntimeConfig } from "../config.js";
 import { loadValidAccessToken } from "../authSession.js";
 import {
   executeTask,
-  fetchUserCompletedProcesses,
-  fetchUserDoingProcesses,
-  fetchUserDoneProcesses,
-  fetchUserTodoTasks
+  fetchMyCompletedProcesses,
+  fetchMyDoingProcesses,
+  fetchMyDoneProcesses,
+  fetchMyTodoTasks
 } from "../infoplusClient.js";
 import { getDefaultKeyring } from "../keyring.js";
 import { renderTable } from "../output.js";
@@ -57,9 +57,6 @@ function resolveTaskCommandContext(options, deps = {}) {
   const env = deps.env || process.env;
   const keyring = deps.keyring || getDefaultKeyring();
   const config = resolveRuntimeConfig(options, env);
-  if (!config.username) {
-    throw new Error("Missing username. Provide --username or set WORKFLOW_USERNAME.");
-  }
 
   return { fetchImpl, writer, keyring, config };
 }
@@ -108,7 +105,7 @@ export async function runTasksTodo(options, deps = {}) {
   const accessToken = await fetchTokenForCommand(config, keyring);
   let entities;
   try {
-    entities = await fetchUserTodoTasks(config, config.username, accessToken, fetchImpl);
+    entities = await fetchMyTodoTasks(config, accessToken, fetchImpl);
   } catch (error) {
     throw toLoginHintError(error);
   }
@@ -121,7 +118,7 @@ export async function runTasksDoing(options, deps = {}) {
   const accessToken = await fetchTokenForCommand(config, keyring);
   let entities;
   try {
-    entities = await fetchUserDoingProcesses(config, config.username, accessToken, fetchImpl);
+    entities = await fetchMyDoingProcesses(config, accessToken, fetchImpl);
   } catch (error) {
     throw toLoginHintError(error);
   }
@@ -134,7 +131,7 @@ export async function runTasksDone(options, deps = {}) {
   const accessToken = await fetchTokenForCommand(config, keyring);
   let entities;
   try {
-    entities = await fetchUserDoneProcesses(config, config.username, accessToken, fetchImpl);
+    entities = await fetchMyDoneProcesses(config, accessToken, fetchImpl);
   } catch (error) {
     throw toLoginHintError(error);
   }
@@ -149,8 +146,8 @@ export async function runTasksList(options, deps = {}) {
   let completedProcesses;
   try {
     [todoTasks, completedProcesses] = await Promise.all([
-      fetchUserTodoTasks(config, config.username, accessToken, fetchImpl),
-      fetchUserCompletedProcesses(config, config.username, accessToken, fetchImpl)
+      fetchMyTodoTasks(config, accessToken, fetchImpl),
+      fetchMyCompletedProcesses(config, accessToken, fetchImpl)
     ]);
   } catch (error) {
     throw toLoginHintError(error);
@@ -162,6 +159,9 @@ export async function runTasksList(options, deps = {}) {
 
 export async function runTasksExecute(taskId, options, deps = {}) {
   const { fetchImpl, writer, keyring, config } = resolveTaskCommandContext(options, deps);
+  if (!config.username) {
+    throw new Error("Missing username. Provide --username or set WORKFLOW_USERNAME.");
+  }
   const accessToken = await fetchTokenForCommand(config, keyring);
   let entities;
   try {
@@ -181,7 +181,6 @@ export async function runTasksExecute(taskId, options, deps = {}) {
 
 function addCommonOptions(command) {
   return command
-    .option("--username <username>", "target username (defaults to WORKFLOW_USERNAME)")
     .option("--base-url <url>", "override WORKFLOW_BASE_URL")
     .option("--json", "output raw JSON entities");
 }
@@ -211,9 +210,9 @@ export function registerTasksCommands(program) {
     await runTasksList(options);
   });
 
-  addCommonOptions(tasksCommand.command("execute <taskId>").description("Execute a task by id")).action(
-    async (taskId, options) => {
+  addCommonOptions(tasksCommand.command("execute <taskId>").description("Execute a task by id"))
+    .option("--username <username>", "target username (defaults to WORKFLOW_USERNAME)")
+    .action(async (taskId, options) => {
       await runTasksExecute(taskId, options);
-    }
-  );
+    });
 }

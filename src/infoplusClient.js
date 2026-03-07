@@ -10,8 +10,8 @@ function myAppsUrl(baseUrl) {
   return `${baseUrl}/infoplus/apis/v2/me/apps`;
 }
 
-function userScopedApiUrl(baseUrl, username, path) {
-  return `${baseUrl}/infoplus/apis/v2/user/${encodeURIComponent(username)}/${path}`;
+function meScopedApiUrl(baseUrl, path) {
+  return `${baseUrl}/infoplus/apis/v2/me/${path}`;
 }
 
 function apiUrl(baseUrl, path) {
@@ -375,49 +375,49 @@ async function requestInfoPlusEntities(requestOptions, fetchImpl) {
   return payload.entities;
 }
 
-export async function fetchUserTodoTasks(config, username, accessToken, fetchImpl = fetch) {
+export async function fetchMyTodoTasks(config, accessToken, fetchImpl = fetch) {
   return requestInfoPlusEntities(
     {
-      url: userScopedApiUrl(config.baseUrl, username, "tasks/todo"),
+      url: meScopedApiUrl(config.baseUrl, "tasks/todo"),
       method: "GET",
       accessToken,
-      errorContext: `Failed to fetch todo tasks for user "${username}"`
+      errorContext: "Failed to fetch todo tasks"
     },
     fetchImpl
   );
 }
 
-export async function fetchUserDoingProcesses(config, username, accessToken, fetchImpl = fetch) {
+export async function fetchMyDoingProcesses(config, accessToken, fetchImpl = fetch) {
   return requestInfoPlusEntities(
     {
-      url: userScopedApiUrl(config.baseUrl, username, "processes/doing"),
+      url: meScopedApiUrl(config.baseUrl, "processes/doing"),
       method: "GET",
       accessToken,
-      errorContext: `Failed to fetch doing processes for user "${username}"`
+      errorContext: "Failed to fetch doing processes"
     },
     fetchImpl
   );
 }
 
-export async function fetchUserDoneProcesses(config, username, accessToken, fetchImpl = fetch) {
+export async function fetchMyDoneProcesses(config, accessToken, fetchImpl = fetch) {
   return requestInfoPlusEntities(
     {
-      url: userScopedApiUrl(config.baseUrl, username, "processes/done"),
+      url: meScopedApiUrl(config.baseUrl, "processes/done"),
       method: "GET",
       accessToken,
-      errorContext: `Failed to fetch done processes for user "${username}"`
+      errorContext: "Failed to fetch done processes"
     },
     fetchImpl
   );
 }
 
-export async function fetchUserCompletedProcesses(config, username, accessToken, fetchImpl = fetch) {
+export async function fetchMyCompletedProcesses(config, accessToken, fetchImpl = fetch) {
   return requestInfoPlusEntities(
     {
-      url: userScopedApiUrl(config.baseUrl, username, "processes/completed"),
+      url: meScopedApiUrl(config.baseUrl, "processes/completed"),
       method: "GET",
       accessToken,
-      errorContext: `Failed to fetch completed processes for user "${username}"`
+      errorContext: "Failed to fetch completed processes"
     },
     fetchImpl
   );

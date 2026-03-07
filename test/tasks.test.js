@@ -54,9 +54,9 @@ async function makeDeps(baseUrl, writer = createWriter()) {
   };
 }
 
-test("runTasksTodo renders todo tasks from user-scoped endpoint", async () => {
+test("runTasksTodo renders todo tasks from me-scoped endpoint", async () => {
   const { server, baseUrl } = await startMockServer({
-    "GET /infoplus/apis/v2/user/alice/tasks/todo": (req, res) => {
+    "GET /infoplus/apis/v2/me/tasks/todo": (req, res) => {
       assert.equal(req.headers.authorization, "Bearer shared-token");
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
@@ -82,7 +82,7 @@ test("runTasksTodo renders todo tasks from user-scoped endpoint", async () => {
 
   const writer = createWriter();
   try {
-    const tasks = await runTasksTodo({ username: "alice" }, await makeDeps(baseUrl, writer));
+    const tasks = await runTasksTodo({}, await makeDeps(baseUrl, writer));
     assert.equal(tasks.length, 1);
     const output = writer.read();
     assert.match(output, /TASK_ID/);
@@ -95,7 +95,7 @@ test("runTasksTodo renders todo tasks from user-scoped endpoint", async () => {
 
 test("runTasksDoing and runTasksDone call process endpoints", async () => {
   const { server, baseUrl } = await startMockServer({
-    "GET /infoplus/apis/v2/user/alice/processes/doing": (_req, res) => {
+    "GET /infoplus/apis/v2/me/processes/doing": (_req, res) => {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(
@@ -105,7 +105,7 @@ test("runTasksDoing and runTasksDone call process endpoints", async () => {
         })
       );
     },
-    "GET /infoplus/apis/v2/user/alice/processes/done": (_req, res) => {
+    "GET /infoplus/apis/v2/me/processes/done": (_req, res) => {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(
@@ -120,8 +120,8 @@ test("runTasksDoing and runTasksDone call process endpoints", async () => {
   try {
     const doingWriter = createWriter();
     const doneWriter = createWriter();
-    const doing = await runTasksDoing({ username: "alice" }, await makeDeps(baseUrl, doingWriter));
-    const done = await runTasksDone({ username: "alice" }, await makeDeps(baseUrl, doneWriter));
+    const doing = await runTasksDoing({}, await makeDeps(baseUrl, doingWriter));
+    const done = await runTasksDone({}, await makeDeps(baseUrl, doneWriter));
     assert.equal(doing[0].id, "p-doing");
     assert.equal(done[0].id, "p-done");
   } finally {
@@ -131,7 +131,7 @@ test("runTasksDoing and runTasksDone call process endpoints", async () => {
 
 test("runTasksList returns todo + completed mixed rows", async () => {
   const { server, baseUrl } = await startMockServer({
-    "GET /infoplus/apis/v2/user/alice/tasks/todo": (_req, res) => {
+    "GET /infoplus/apis/v2/me/tasks/todo": (_req, res) => {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(
@@ -141,7 +141,7 @@ test("runTasksList returns todo + completed mixed rows", async () => {
         })
       );
     },
-    "GET /infoplus/apis/v2/user/alice/processes/completed": (_req, res) => {
+    "GET /infoplus/apis/v2/me/processes/completed": (_req, res) => {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(
@@ -155,7 +155,7 @@ test("runTasksList returns todo + completed mixed rows", async () => {
 
   const writer = createWriter();
   try {
-    const rows = await runTasksList({ username: "alice" }, await makeDeps(baseUrl, writer));
+    const rows = await runTasksList({}, await makeDeps(baseUrl, writer));
 
     assert.equal(rows.length, 2);
     assert.equal(rows[0].type, "task");
@@ -194,9 +194,19 @@ test("runTasksExecute falls back from /tasks/{id} to /task/{id}", async () => {
   }
 });
 
+test("runTasksExecute requires username for execute API", async () => {
+  const { server, baseUrl } = await startMockServer({});
+  try {
+    const deps = await makeDeps(baseUrl);
+    await assert.rejects(() => runTasksExecute("task-42", {}, deps), /Missing username/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("runTasksTodo prompts login when token is invalid", async () => {
   const { server, baseUrl } = await startMockServer({
-    "GET /infoplus/apis/v2/user/alice/tasks/todo": (_req, res) => {
+    "GET /infoplus/apis/v2/me/tasks/todo": (_req, res) => {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(
@@ -211,10 +221,7 @@ test("runTasksTodo prompts login when token is invalid", async () => {
   });
 
   try {
-    await assert.rejects(
-      runTasksTodo({ username: "alice" }, await makeDeps(baseUrl)),
-      /scope is invalid/
-    );
+    await assert.rejects(runTasksTodo({}, await makeDeps(baseUrl)), /scope is invalid/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

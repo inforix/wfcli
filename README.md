@@ -34,7 +34,7 @@ Required for `wfcli auth login`:
 Optional:
 
 - `WORKFLOW_AUTH_SCOPE` (default: `app+task+process+data+openid+profile`)
-- `WORKFLOW_USERNAME`
+- `WORKFLOW_USERNAME` (only used by `wfcli tasks execute`)
 
 ## Usage
 
@@ -55,10 +55,11 @@ npx wfcli apps list --base-url https://xjtu.shmtu.edu.cn
 npx wfcli apps list --json
 
 # Task commands
-npx wfcli tasks todo --username alice
-npx wfcli tasks doing --username alice
-npx wfcli tasks done --username alice
-npx wfcli tasks list --username alice
+npx wfcli tasks todo
+npx wfcli tasks doing
+npx wfcli tasks done
+npx wfcli tasks list
+# execute still needs a username for POST body userId
 npx wfcli tasks execute 123456 --username alice
 ```
 
@@ -78,10 +79,10 @@ npx wfcli tasks execute 123456 --username alice
 `wfcli apps` and `wfcli tasks` then read this keyring token and call:
 
 - `GET /infoplus/apis/v2/me/apps` (`apps list`, personal method)
-- `GET /infoplus/apis/v2/user/{username}/tasks/todo`
-- `GET /infoplus/apis/v2/user/{username}/processes/doing`
-- `GET /infoplus/apis/v2/user/{username}/processes/done`
-- `GET /infoplus/apis/v2/user/{username}/processes/completed`
+- `GET /infoplus/apis/v2/me/tasks/todo`
+- `GET /infoplus/apis/v2/me/processes/doing`
+- `GET /infoplus/apis/v2/me/processes/done`
+- `GET /infoplus/apis/v2/me/processes/completed`
 - `POST /infoplus/apis/v2/tasks/{id}` (fallback: `/task/{id}`)
 
 If Basic client auth is rejected by the server during token exchange, it retries with
