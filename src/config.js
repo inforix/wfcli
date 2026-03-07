@@ -2,19 +2,13 @@ function normalizeBaseUrl(baseUrl) {
   return baseUrl ? baseUrl.replace(/\/+$/, "") : "";
 }
 
-export function resolveRuntimeConfig(options = {}, env = process.env) {
+function collectRuntimeBaseConfig(options = {}, env = process.env) {
   const clientId = env.WORKFLOW_CLIENT_ID;
-  const clientSecret = env.WORKFLOW_CLIENT_SECRET;
   const baseUrl = normalizeBaseUrl(options.baseUrl || env.WORKFLOW_BASE_URL);
-  const scope = options.scope || env.WORKFLOW_SCOPE || "sys_app";
-  const username = options.username || env.WORKFLOW_USERNAME;
 
   const missing = [];
   if (!clientId) {
     missing.push("WORKFLOW_CLIENT_ID");
-  }
-  if (!clientSecret) {
-    missing.push("WORKFLOW_CLIENT_SECRET");
   }
   if (!baseUrl) {
     missing.push("WORKFLOW_BASE_URL");
@@ -26,9 +20,35 @@ export function resolveRuntimeConfig(options = {}, env = process.env) {
 
   return {
     clientId,
-    clientSecret,
+    baseUrl
+  };
+}
+
+export function resolveRuntimeConfig(options = {}, env = process.env) {
+  const { clientId, baseUrl } = collectRuntimeBaseConfig(options, env);
+  const scope = options.scope || env.WORKFLOW_SCOPE || "sys_app";
+  const username = options.username || env.WORKFLOW_USERNAME;
+
+  return {
+    clientId,
     baseUrl,
     scope,
     username
+  };
+}
+
+export function resolveAuthLoginConfig(options = {}, env = process.env) {
+  const { clientId, baseUrl } = collectRuntimeBaseConfig(options, env);
+  const clientSecret = env.WORKFLOW_CLIENT_SECRET;
+  if (!clientSecret) {
+    throw new Error("Missing required environment variables: WORKFLOW_CLIENT_SECRET");
+  }
+  const scope = options.scope || env.WORKFLOW_AUTH_SCOPE || "app+task+process+data+openid+profile";
+
+  return {
+    clientId,
+    clientSecret,
+    baseUrl,
+    scope
   };
 }

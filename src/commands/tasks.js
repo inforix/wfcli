@@ -1,12 +1,13 @@
 import { resolveRuntimeConfig } from "../config.js";
+import { loadValidAccessToken } from "../authSession.js";
 import {
   executeTask,
-  fetchSystemToken,
   fetchUserCompletedProcesses,
   fetchUserDoingProcesses,
   fetchUserDoneProcesses,
   fetchUserTodoTasks
 } from "../infoplusClient.js";
+import { getDefaultKeyring } from "../keyring.js";
 import { renderTable } from "../output.js";
 
 const TODO_COLUMNS = [
@@ -37,20 +38,38 @@ const MIXED_LIST_COLUMNS = [
   { key: "update", title: "UPDATE" }
 ];
 
+function toLoginHintError(error) {
+  if (error?.requiresLogin) {
+    const ecode = `${error?.payload?.ecode || error?.payload?.error || ""}`.toUpperCase();
+    if (ecode.includes("SCOPE")) {
+      return new Error(
+        'Access token scope is invalid. Run "wfcli auth login --scope app+task+process+data+openid+profile" and retry.'
+      );
+    }
+    return new Error('Access token is invalid or expired. Run "wfcli auth login" and retry.');
+  }
+  return error;
+}
+
 function resolveTaskCommandContext(options, deps = {}) {
   const fetchImpl = deps.fetchImpl || fetch;
   const writer = deps.writer || process.stdout;
   const env = deps.env || process.env;
+  const keyring = deps.keyring || getDefaultKeyring();
   const config = resolveRuntimeConfig(options, env);
   if (!config.username) {
     throw new Error("Missing username. Provide --username or set WORKFLOW_USERNAME.");
   }
 
-  return { fetchImpl, writer, config };
+  return { fetchImpl, writer, keyring, config };
 }
 
-async function fetchTokenForCommand(config, fetchImpl) {
-  return fetchSystemToken(config, fetchImpl);
+async function fetchTokenForCommand(config, keyring) {
+  const accessToken = await loadValidAccessToken(config, keyring);
+  if (!accessToken) {
+    throw new Error('No valid OAuth token found in keyring. Run "wfcli auth login" first.');
+  }
+  return accessToken;
 }
 
 function renderOrPrintJson(options, writer, entities, columns, emptyMessage) {
@@ -85,45 +104,71 @@ function toUnifiedList(todoTasks, completedProcesses) {
 }
 
 export async function runTasksTodo(options, deps = {}) {
-  const { fetchImpl, writer, config } = resolveTaskCommandContext(options, deps);
-  const token = await fetchTokenForCommand(config, fetchImpl);
-  const entities = await fetchUserTodoTasks(config, config.username, token.accessToken, fetchImpl);
+  const { fetchImpl, writer, keyring, config } = resolveTaskCommandContext(options, deps);
+  const accessToken = await fetchTokenForCommand(config, keyring);
+  let entities;
+  try {
+    entities = await fetchUserTodoTasks(config, config.username, accessToken, fetchImpl);
+  } catch (error) {
+    throw toLoginHintError(error);
+  }
   renderOrPrintJson(options, writer, entities, TODO_COLUMNS, "No todo tasks found.");
   return entities;
 }
 
 export async function runTasksDoing(options, deps = {}) {
-  const { fetchImpl, writer, config } = resolveTaskCommandContext(options, deps);
-  const token = await fetchTokenForCommand(config, fetchImpl);
-  const entities = await fetchUserDoingProcesses(config, config.username, token.accessToken, fetchImpl);
+  const { fetchImpl, writer, keyring, config } = resolveTaskCommandContext(options, deps);
+  const accessToken = await fetchTokenForCommand(config, keyring);
+  let entities;
+  try {
+    entities = await fetchUserDoingProcesses(config, config.username, accessToken, fetchImpl);
+  } catch (error) {
+    throw toLoginHintError(error);
+  }
   renderOrPrintJson(options, writer, entities, PROCESS_COLUMNS, "No doing processes found.");
   return entities;
 }
 
 export async function runTasksDone(options, deps = {}) {
-  const { fetchImpl, writer, config } = resolveTaskCommandContext(options, deps);
-  const token = await fetchTokenForCommand(config, fetchImpl);
-  const entities = await fetchUserDoneProcesses(config, config.username, token.accessToken, fetchImpl);
+  const { fetchImpl, writer, keyring, config } = resolveTaskCommandContext(options, deps);
+  const accessToken = await fetchTokenForCommand(config, keyring);
+  let entities;
+  try {
+    entities = await fetchUserDoneProcesses(config, config.username, accessToken, fetchImpl);
+  } catch (error) {
+    throw toLoginHintError(error);
+  }
   renderOrPrintJson(options, writer, entities, PROCESS_COLUMNS, "No done processes found.");
   return entities;
 }
 
 export async function runTasksList(options, deps = {}) {
-  const { fetchImpl, writer, config } = resolveTaskCommandContext(options, deps);
-  const token = await fetchTokenForCommand(config, fetchImpl);
-  const [todoTasks, completedProcesses] = await Promise.all([
-    fetchUserTodoTasks(config, config.username, token.accessToken, fetchImpl),
-    fetchUserCompletedProcesses(config, config.username, token.accessToken, fetchImpl)
-  ]);
+  const { fetchImpl, writer, keyring, config } = resolveTaskCommandContext(options, deps);
+  const accessToken = await fetchTokenForCommand(config, keyring);
+  let todoTasks;
+  let completedProcesses;
+  try {
+    [todoTasks, completedProcesses] = await Promise.all([
+      fetchUserTodoTasks(config, config.username, accessToken, fetchImpl),
+      fetchUserCompletedProcesses(config, config.username, accessToken, fetchImpl)
+    ]);
+  } catch (error) {
+    throw toLoginHintError(error);
+  }
   const entities = toUnifiedList(todoTasks, completedProcesses);
   renderOrPrintJson(options, writer, entities, MIXED_LIST_COLUMNS, "No tasks or completed processes found.");
   return entities;
 }
 
 export async function runTasksExecute(taskId, options, deps = {}) {
-  const { fetchImpl, writer, config } = resolveTaskCommandContext(options, deps);
-  const token = await fetchTokenForCommand(config, fetchImpl);
-  const entities = await executeTask(config, config.username, taskId, token.accessToken, fetchImpl);
+  const { fetchImpl, writer, keyring, config } = resolveTaskCommandContext(options, deps);
+  const accessToken = await fetchTokenForCommand(config, keyring);
+  let entities;
+  try {
+    entities = await executeTask(config, config.username, taskId, accessToken, fetchImpl);
+  } catch (error) {
+    throw toLoginHintError(error);
+  }
 
   if (options.json) {
     writer.write(`${JSON.stringify(entities, null, 2)}\n`);
@@ -138,7 +183,6 @@ function addCommonOptions(command) {
   return command
     .option("--username <username>", "target username (defaults to WORKFLOW_USERNAME)")
     .option("--base-url <url>", "override WORKFLOW_BASE_URL")
-    .option("--scope <scope>", "override WORKFLOW_SCOPE")
     .option("--json", "output raw JSON entities");
 }
 

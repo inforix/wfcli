@@ -8,19 +8,7 @@ import {
   runTasksList,
   runTasksTodo
 } from "../src/commands/tasks.js";
-
-function createWriter() {
-  let data = "";
-  return {
-    write(chunk) {
-      data += chunk;
-      return true;
-    },
-    read() {
-      return data;
-    }
-  };
-}
+import { createMemoryKeyring, createWriter, seedAccessToken } from "../test-helpers.js";
 
 function startMockServer(routes) {
   return new Promise((resolve) => {
@@ -52,20 +40,24 @@ function startMockServer(routes) {
 function makeEnv(baseUrl) {
   return {
     WORKFLOW_CLIENT_ID: "cid",
-    WORKFLOW_CLIENT_SECRET: "secret",
     WORKFLOW_BASE_URL: baseUrl
+  };
+}
+
+async function makeDeps(baseUrl, writer = createWriter()) {
+  const keyring = createMemoryKeyring();
+  await seedAccessToken(keyring, { baseUrl, clientId: "cid" }, "shared-token");
+  return {
+    writer,
+    keyring,
+    env: makeEnv(baseUrl)
   };
 }
 
 test("runTasksTodo renders todo tasks from user-scoped endpoint", async () => {
   const { server, baseUrl } = await startMockServer({
-    "POST /infoplus/oauth2/token": (_req, res) => {
-      res.statusCode = 200;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ access_token: "t1" }));
-    },
     "GET /infoplus/apis/v2/user/alice/tasks/todo": (req, res) => {
-      assert.equal(req.headers.authorization, "Bearer t1");
+      assert.equal(req.headers.authorization, "Bearer shared-token");
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(
@@ -90,13 +82,7 @@ test("runTasksTodo renders todo tasks from user-scoped endpoint", async () => {
 
   const writer = createWriter();
   try {
-    const tasks = await runTasksTodo(
-      { username: "alice" },
-      {
-        writer,
-        env: makeEnv(baseUrl)
-      }
-    );
+    const tasks = await runTasksTodo({ username: "alice" }, await makeDeps(baseUrl, writer));
     assert.equal(tasks.length, 1);
     const output = writer.read();
     assert.match(output, /TASK_ID/);
@@ -109,11 +95,6 @@ test("runTasksTodo renders todo tasks from user-scoped endpoint", async () => {
 
 test("runTasksDoing and runTasksDone call process endpoints", async () => {
   const { server, baseUrl } = await startMockServer({
-    "POST /infoplus/oauth2/token": (_req, res) => {
-      res.statusCode = 200;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ access_token: "t2" }));
-    },
     "GET /infoplus/apis/v2/user/alice/processes/doing": (_req, res) => {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
@@ -139,14 +120,8 @@ test("runTasksDoing and runTasksDone call process endpoints", async () => {
   try {
     const doingWriter = createWriter();
     const doneWriter = createWriter();
-    const doing = await runTasksDoing(
-      { username: "alice" },
-      { writer: doingWriter, env: makeEnv(baseUrl) }
-    );
-    const done = await runTasksDone(
-      { username: "alice" },
-      { writer: doneWriter, env: makeEnv(baseUrl) }
-    );
+    const doing = await runTasksDoing({ username: "alice" }, await makeDeps(baseUrl, doingWriter));
+    const done = await runTasksDone({ username: "alice" }, await makeDeps(baseUrl, doneWriter));
     assert.equal(doing[0].id, "p-doing");
     assert.equal(done[0].id, "p-done");
   } finally {
@@ -156,11 +131,6 @@ test("runTasksDoing and runTasksDone call process endpoints", async () => {
 
 test("runTasksList returns todo + completed mixed rows", async () => {
   const { server, baseUrl } = await startMockServer({
-    "POST /infoplus/oauth2/token": (_req, res) => {
-      res.statusCode = 200;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ access_token: "t3" }));
-    },
     "GET /infoplus/apis/v2/user/alice/tasks/todo": (_req, res) => {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
@@ -185,13 +155,7 @@ test("runTasksList returns todo + completed mixed rows", async () => {
 
   const writer = createWriter();
   try {
-    const rows = await runTasksList(
-      { username: "alice" },
-      {
-        writer,
-        env: makeEnv(baseUrl)
-      }
-    );
+    const rows = await runTasksList({ username: "alice" }, await makeDeps(baseUrl, writer));
 
     assert.equal(rows.length, 2);
     assert.equal(rows[0].type, "task");
@@ -206,11 +170,6 @@ test("runTasksList returns todo + completed mixed rows", async () => {
 
 test("runTasksExecute falls back from /tasks/{id} to /task/{id}", async () => {
   const { server, baseUrl } = await startMockServer({
-    "POST /infoplus/oauth2/token": (_req, res) => {
-      res.statusCode = 200;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ access_token: "t4" }));
-    },
     "POST /infoplus/apis/v2/tasks/task-42": (_req, res) => {
       res.statusCode = 404;
       res.setHeader("content-type", "application/json");
@@ -226,17 +185,36 @@ test("runTasksExecute falls back from /tasks/{id} to /task/{id}", async () => {
 
   const writer = createWriter();
   try {
-    const entities = await runTasksExecute(
-      "task-42",
-      { username: "alice" },
-      {
-        writer,
-        env: makeEnv(baseUrl)
-      }
-    );
+    const entities = await runTasksExecute("task-42", { username: "alice" }, await makeDeps(baseUrl, writer));
 
     assert.equal(entities.length, 1);
     assert.match(writer.read(), /Task task-42 execute request submitted/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runTasksTodo prompts login when token is invalid", async () => {
+  const { server, baseUrl } = await startMockServer({
+    "GET /infoplus/apis/v2/user/alice/tasks/todo": (_req, res) => {
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          errno: 10010,
+          ecode: "ACCESS_TOKEN_SCOPE_INVALID",
+          error: "ACCESS_TOKEN_SCOPE_INVALID",
+          entities: []
+        })
+      );
+    }
+  });
+
+  try {
+    await assert.rejects(
+      runTasksTodo({ username: "alice" }, await makeDeps(baseUrl)),
+      /scope is invalid/
+    );
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

@@ -2,19 +2,7 @@ import http from "node:http";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runAppsList } from "../src/commands/apps.js";
-
-function createWriter() {
-  let data = "";
-  return {
-    write(chunk) {
-      data += chunk;
-      return true;
-    },
-    read() {
-      return data;
-    }
-  };
-}
+import { createMemoryKeyring, createWriter, seedAccessToken } from "../test-helpers.js";
 
 function startMockServer(routes) {
   return new Promise((resolve) => {
@@ -45,14 +33,7 @@ function startMockServer(routes) {
 
 test("runAppsList renders table output", async () => {
   const { server, baseUrl } = await startMockServer({
-    "POST /infoplus/oauth2/token": (req, res, body) => {
-      assert.match(req.headers.authorization || "", /^Basic /);
-      assert.match(body, /grant_type=client_credentials/);
-      res.statusCode = 200;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ access_token: "token123", token_type: "bearer", expires_in: 3600 }));
-    },
-    "GET /infoplus/apis/v2/user/alice/apps": (req, res) => {
+    "GET /infoplus/apis/v2/me/apps": (req, res) => {
       assert.equal(req.headers.authorization, "Bearer token123");
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
@@ -78,14 +59,16 @@ test("runAppsList renders table output", async () => {
   });
 
   const writer = createWriter();
+  const keyring = createMemoryKeyring();
   try {
+    await seedAccessToken(keyring, { baseUrl, clientId: "cid" }, "token123");
     const apps = await runAppsList(
-      { username: "alice" },
+      {},
       {
         writer,
+        keyring,
         env: {
           WORKFLOW_CLIENT_ID: "cid",
-          WORKFLOW_CLIENT_SECRET: "secret",
           WORKFLOW_BASE_URL: baseUrl
         }
       }
@@ -102,12 +85,7 @@ test("runAppsList renders table output", async () => {
 
 test("runAppsList supports --json output", async () => {
   const { server, baseUrl } = await startMockServer({
-    "POST /infoplus/oauth2/token": (_req, res) => {
-      res.statusCode = 200;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ access_token: "token-json" }));
-    },
-    "GET /infoplus/apis/v2/user/alice/apps": (_req, res) => {
+    "GET /infoplus/apis/v2/me/apps": (_req, res) => {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(
@@ -120,14 +98,16 @@ test("runAppsList supports --json output", async () => {
   });
 
   const writer = createWriter();
+  const keyring = createMemoryKeyring();
   try {
+    await seedAccessToken(keyring, { baseUrl, clientId: "cid" }, "token-json");
     await runAppsList(
-      { username: "alice", json: true },
+      { json: true },
       {
         writer,
+        keyring,
         env: {
           WORKFLOW_CLIENT_ID: "cid",
-          WORKFLOW_CLIENT_SECRET: "secret",
           WORKFLOW_BASE_URL: baseUrl
         }
       }
@@ -141,12 +121,7 @@ test("runAppsList supports --json output", async () => {
 
 test("runAppsList surfaces InfoPlus errno failures", async () => {
   const { server, baseUrl } = await startMockServer({
-    "POST /infoplus/oauth2/token": (_req, res) => {
-      res.statusCode = 200;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ access_token: "token123" }));
-    },
-    "GET /infoplus/apis/v2/user/alice/apps": (_req, res) => {
+    "GET /infoplus/apis/v2/me/apps": (_req, res) => {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ errno: 101, ecode: "NO_ACCESS", error: "forbidden", entities: [] }));
@@ -154,19 +129,59 @@ test("runAppsList surfaces InfoPlus errno failures", async () => {
   });
 
   try {
+    const keyring = createMemoryKeyring();
+    await seedAccessToken(keyring, { baseUrl, clientId: "cid" }, "token123");
     await assert.rejects(
       runAppsList(
-        { username: "alice" },
+        {},
         {
           writer: createWriter(),
+          keyring,
           env: {
             WORKFLOW_CLIENT_ID: "cid",
-            WORKFLOW_CLIENT_SECRET: "secret",
             WORKFLOW_BASE_URL: baseUrl
           }
         }
       ),
       /InfoPlus API error/
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runAppsList prompts login when access token is invalid", async () => {
+  const { server, baseUrl } = await startMockServer({
+    "GET /infoplus/apis/v2/me/apps": (_req, res) => {
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          errno: 10010,
+          ecode: "ACCESS_TOKEN_SCOPE_INVALID",
+          error: "ACCESS_TOKEN_SCOPE_INVALID",
+          entities: []
+        })
+      );
+    }
+  });
+
+  try {
+    const keyring = createMemoryKeyring();
+    await seedAccessToken(keyring, { baseUrl, clientId: "cid" }, "token123");
+    await assert.rejects(
+      runAppsList(
+        {},
+        {
+          writer: createWriter(),
+          keyring,
+          env: {
+            WORKFLOW_CLIENT_ID: "cid",
+            WORKFLOW_BASE_URL: baseUrl
+          }
+        }
+      ),
+      /scope is invalid/
     );
   } finally {
     await new Promise((resolve) => server.close(resolve));

@@ -2,8 +2,12 @@ function tokenUrl(baseUrl) {
   return `${baseUrl}/infoplus/oauth2/token`;
 }
 
-function appsUrl(baseUrl, username) {
-  return `${baseUrl}/infoplus/apis/v2/user/${encodeURIComponent(username)}/apps`;
+function authorizationUrl(baseUrl) {
+  return `${baseUrl}/infoplus/oauth2/authorize`;
+}
+
+function myAppsUrl(baseUrl) {
+  return `${baseUrl}/infoplus/apis/v2/me/apps`;
 }
 
 function userScopedApiUrl(baseUrl, username, path) {
@@ -12,6 +16,14 @@ function userScopedApiUrl(baseUrl, username, path) {
 
 function apiUrl(baseUrl, path) {
   return `${baseUrl}/infoplus/apis/v2/${path}`;
+}
+
+function normalizeOAuthScope(scope) {
+  return `${scope || ""}`
+    .trim()
+    .split(/[+\s]+/)
+    .filter(Boolean)
+    .join(" ");
 }
 
 function toBasicAuth(clientId, clientSecret) {
@@ -32,6 +44,30 @@ async function parseJsonResponse(response) {
   }
 }
 
+function createRequestError(message, status, payload) {
+  const error = new Error(message);
+  error.status = status;
+  error.payload = payload;
+  return error;
+}
+
+function isAccessTokenIssue(status, payload) {
+  const fields = [payload?.ecode, payload?.error]
+    .filter(Boolean)
+    .map((value) => `${value}`.toUpperCase());
+  if (fields.some((value) => value.includes("ACCESS_TOKEN") || value.includes("TOKEN_EXPIRED"))) {
+    return true;
+  }
+  return status === 401;
+}
+
+function markLoginRequiredIfNeeded(error) {
+  if (isAccessTokenIssue(error.status, error.payload)) {
+    error.requiresLogin = true;
+  }
+  return error;
+}
+
 async function requestTokenWithBasicAuth(config, fetchImpl) {
   const response = await fetchImpl(tokenUrl(config.baseUrl), {
     method: "POST",
@@ -43,6 +79,51 @@ async function requestTokenWithBasicAuth(config, fetchImpl) {
     body: new URLSearchParams({
       grant_type: "client_credentials",
       scope: config.scope
+    })
+  });
+
+  return {
+    status: response.status,
+    ok: response.ok,
+    payload: await parseJsonResponse(response)
+  };
+}
+
+async function requestTokenByAuthorizationCodeBasicAuth(config, code, redirectUri, fetchImpl) {
+  const response = await fetchImpl(tokenUrl(config.baseUrl), {
+    method: "POST",
+    headers: {
+      Authorization: toBasicAuth(config.clientId, config.clientSecret),
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json"
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri
+    })
+  });
+
+  return {
+    status: response.status,
+    ok: response.ok,
+    payload: await parseJsonResponse(response)
+  };
+}
+
+async function requestTokenByAuthorizationCodeBodyClient(config, code, redirectUri, fetchImpl) {
+  const response = await fetchImpl(tokenUrl(config.baseUrl), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json"
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+      client_id: config.clientId,
+      client_secret: config.clientSecret
     })
   });
 
@@ -105,8 +186,46 @@ export async function fetchSystemToken(config, fetchImpl = fetch) {
   return extractAccessToken(bodyResult);
 }
 
-export async function fetchUserApps(config, username, accessToken, fetchImpl = fetch) {
-  const response = await fetchImpl(appsUrl(config.baseUrl, username), {
+export function buildAuthorizationCodeUrl(config, redirectUri, state) {
+  const normalizedScope = normalizeOAuthScope(config.scope);
+  const query = new URLSearchParams({
+    response_type: "code",
+    client_id: config.clientId,
+    redirect_uri: redirectUri,
+    scope: normalizedScope,
+    state
+  });
+  return `${authorizationUrl(config.baseUrl)}?${query.toString()}`;
+}
+
+export async function exchangeAuthorizationCode(config, code, redirectUri, fetchImpl = fetch) {
+  const basicResult = await requestTokenByAuthorizationCodeBasicAuth(
+    config,
+    code,
+    redirectUri,
+    fetchImpl
+  );
+  if (basicResult.ok && basicResult.payload?.access_token) {
+    return basicResult.payload;
+  }
+
+  const bodyResult = await requestTokenByAuthorizationCodeBodyClient(
+    config,
+    code,
+    redirectUri,
+    fetchImpl
+  );
+  if (!bodyResult.ok || !bodyResult.payload?.access_token) {
+    throw new Error(
+      `Failed to exchange authorization code. BasicAuth status=${basicResult.status}, BodyAuth status=${bodyResult.status}, payload=${JSON.stringify(bodyResult.payload)}`
+    );
+  }
+
+  return bodyResult.payload;
+}
+
+export async function fetchMyApps(config, accessToken, fetchImpl = fetch) {
+  const response = await fetchImpl(myAppsUrl(config.baseUrl), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -117,8 +236,12 @@ export async function fetchUserApps(config, username, accessToken, fetchImpl = f
   const payload = await parseJsonResponse(response);
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch apps for user "${username}" (status=${response.status}, payload=${JSON.stringify(payload)})`
+    throw markLoginRequiredIfNeeded(
+      createRequestError(
+        `Failed to fetch apps (status=${response.status}, payload=${JSON.stringify(payload)})`,
+        response.status,
+        payload
+      )
     );
   }
 
@@ -127,8 +250,12 @@ export async function fetchUserApps(config, username, accessToken, fetchImpl = f
   }
 
   if (payload.errno !== 0) {
-    throw new Error(
-      `InfoPlus API error: errno=${payload.errno}, ecode=${payload.ecode || ""}, error=${payload.error || "unknown"}`
+    throw markLoginRequiredIfNeeded(
+      createRequestError(
+        `InfoPlus API error: errno=${payload.errno}, ecode=${payload.ecode || ""}, error=${payload.error || "unknown"}`,
+        response.status,
+        payload
+      )
     );
   }
 
@@ -159,12 +286,13 @@ async function requestInfoPlusEntities(requestOptions, fetchImpl) {
   const payload = await parseJsonResponse(response);
 
   if (!response.ok) {
-    const error = new Error(
-      `${errorContext} (status=${response.status}, payload=${JSON.stringify(payload)})`
+    throw markLoginRequiredIfNeeded(
+      createRequestError(
+        `${errorContext} (status=${response.status}, payload=${JSON.stringify(payload)})`,
+        response.status,
+        payload
+      )
     );
-    error.status = response.status;
-    error.payload = payload;
-    throw error;
   }
 
   if (typeof payload.errno !== "number") {
@@ -172,12 +300,13 @@ async function requestInfoPlusEntities(requestOptions, fetchImpl) {
   }
 
   if (payload.errno !== 0) {
-    const error = new Error(
-      `InfoPlus API error: errno=${payload.errno}, ecode=${payload.ecode || ""}, error=${payload.error || "unknown"}`
+    throw markLoginRequiredIfNeeded(
+      createRequestError(
+        `InfoPlus API error: errno=${payload.errno}, ecode=${payload.ecode || ""}, error=${payload.error || "unknown"}`,
+        response.status,
+        payload
+      )
     );
-    error.status = response.status;
-    error.payload = payload;
-    throw error;
   }
 
   if (!Array.isArray(payload.entities)) {
@@ -255,6 +384,12 @@ export async function executeTask(config, username, taskId, accessToken, fetchIm
     } catch (error) {
       errors.push(error);
     }
+  }
+
+  if (errors.some((error) => error?.requiresLogin)) {
+    const loginError = new Error("Access token is invalid or expired.");
+    loginError.requiresLogin = true;
+    throw loginError;
   }
 
   const details = errors.map((error) => error.message).join(" | ");

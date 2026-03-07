@@ -3,6 +3,7 @@
 import dotenv from "dotenv";
 import { Command } from "commander";
 import { registerAppsCommands } from "./commands/apps.js";
+import { registerAuthCommands } from "./commands/auth.js";
 import { registerTasksCommands } from "./commands/tasks.js";
 
 dotenv.config({ quiet: true });
@@ -16,6 +17,7 @@ program
 
 registerAppsCommands(program);
 registerTasksCommands(program);
+registerAuthCommands(program);
 
 program.parseAsync(process.argv).catch((error) => {
   const message = error?.message ?? "Unknown error";
