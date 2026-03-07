@@ -1,5 +1,5 @@
 {
-  "name": "wfcli",
+  "name": "infopluscli",
   "version": "0.1.0",
   "description": "Workflow CLI for SHMTU InfoPlus",
   "main": "src/cli.js",
