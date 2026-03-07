@@ -55,6 +55,7 @@ npx wfcli apps list --base-url https://xjtu.shmtu.edu.cn
 npx wfcli apps list --json
 
 # Task commands
+# todo output columns: process uri, name, source username, date
 npx wfcli tasks todo
 npx wfcli tasks doing
 npx wfcli tasks done

@@ -11,12 +11,10 @@ import { getDefaultKeyring } from "../keyring.js";
 import { renderTable } from "../output.js";
 
 const TODO_COLUMNS = [
-  { key: "id", title: "TASK_ID" },
-  { key: "name", title: "TASK_NAME" },
-  { key: "status", title: "STATUS" },
-  { key: "process.entry", title: "ENTRY" },
-  { key: "process.app.code", title: "APP" },
-  { key: "update", title: "UPDATE" }
+  { key: "processUri", title: "PROCESS_URI" },
+  { key: "name", title: "NAME" },
+  { key: "sourceUsername", title: "SOURCE_USERNAME" },
+  { key: "date", title: "DATE" }
 ];
 
 const PROCESS_COLUMNS = [
@@ -100,6 +98,76 @@ function toUnifiedList(todoTasks, completedProcesses) {
   return [...todoRows, ...completedRows];
 }
 
+function getByPath(value, path) {
+  return path.split(".").reduce((current, key) => {
+    if (current === null || current === undefined) {
+      return undefined;
+    }
+    return current[key];
+  }, value);
+}
+
+function firstDefined(value, paths) {
+  for (const path of paths) {
+    const candidate = getByPath(value, path);
+    if (candidate !== null && candidate !== undefined && candidate !== "") {
+      return candidate;
+    }
+  }
+  return "";
+}
+
+function normalizeDate(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    const ms = numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+    return new Date(ms).toISOString();
+  }
+
+  const parsed = Date.parse(String(value));
+  if (Number.isNaN(parsed)) {
+    return String(value);
+  }
+  return new Date(parsed).toISOString();
+}
+
+function toTodoRows(tasks) {
+  return tasks.map((task) => ({
+    processUri: firstDefined(task, ["process.uri", "process.url", "uri", "url", "process.entry"]),
+    name: firstDefined(task, ["process.name", "name"]),
+    sourceUsername: firstDefined(task, [
+      "process.owner.account",
+      "process.owner.name",
+      "source.username",
+      "source.userName",
+      "sourceUsername",
+      "sourceUserName",
+      "username",
+      "userName",
+      "assignUser.account",
+      "assignUser.name",
+      "process.source.username",
+      "process.source.userName"
+    ]),
+    date: normalizeDate(
+      firstDefined(task, [
+        "assignTime",
+        "process.update",
+        "process.create",
+        "update",
+        "createdAt",
+        "createTime",
+        "createDate",
+        "date"
+      ])
+    )
+  }));
+}
+
 export async function runTasksTodo(options, deps = {}) {
   const { fetchImpl, writer, keyring, config } = resolveTaskCommandContext(options, deps);
   const accessToken = await fetchTokenForCommand(config, keyring);
@@ -109,8 +177,9 @@ export async function runTasksTodo(options, deps = {}) {
   } catch (error) {
     throw toLoginHintError(error);
   }
-  renderOrPrintJson(options, writer, entities, TODO_COLUMNS, "No todo tasks found.");
-  return entities;
+  const rows = toTodoRows(entities);
+  renderOrPrintJson(options, writer, rows, TODO_COLUMNS, "No todo tasks found.");
+  return rows;
 }
 
 export async function runTasksDoing(options, deps = {}) {

@@ -66,12 +66,16 @@ test("runTasksTodo renders todo tasks from me-scoped endpoint", async () => {
           entities: [
             {
               id: "task-1",
-              name: "Approve",
+              name: "Department Review",
               status: 1,
-              update: 1700000000,
+              assignTime: 1700000500,
+              assignUser: { account: "993333" },
               process: {
+                uri: "/process/1001",
                 entry: "1001",
-                app: { code: "leave" }
+                name: "Process A",
+                app: { code: "leave" },
+                owner: { account: "155212" }
               }
             }
           ]
@@ -84,10 +88,14 @@ test("runTasksTodo renders todo tasks from me-scoped endpoint", async () => {
   try {
     const tasks = await runTasksTodo({}, await makeDeps(baseUrl, writer));
     assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].processUri, "/process/1001");
+    assert.equal(tasks[0].name, "Process A");
+    assert.equal(tasks[0].sourceUsername, "155212");
+    assert.equal(tasks[0].date, "2023-11-14T22:21:40.000Z");
     const output = writer.read();
-    assert.match(output, /TASK_ID/);
-    assert.match(output, /task-1/);
-    assert.match(output, /leave/);
+    assert.match(output, /PROCESS_URI/);
+    assert.match(output, /SOURCE_USERNAME/);
+    assert.match(output, /2023-11-14T22:21:40.000Z/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
