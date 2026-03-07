@@ -375,6 +375,18 @@ export async function fetchMyProfile(config, accessToken, fetchImpl = fetch) {
   return entities[0] || null;
 }
 
+export async function fetchMyPositions(config, accessToken, fetchImpl = fetch) {
+  return requestInfoPlusEntities(
+    {
+      url: meScopedApiUrl(config.baseUrl, "positions"),
+      method: "GET",
+      accessToken,
+      errorContext: "Failed to fetch current user positions"
+    },
+    fetchImpl
+  );
+}
+
 export async function fetchAppMeta(
   config,
   idc,

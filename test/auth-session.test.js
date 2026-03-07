@@ -53,3 +53,34 @@ test("loadValidAccessToken accepts non-expired second-based expiresAt", async ()
   const token = await loadValidAccessToken(config, keyring, nowSec * 1000);
   assert.equal(token, "token-seconds-valid");
 });
+
+test("loadValidAccessToken can bypass expiration when DISABLE_EXPIRE_CHECK=1", async () => {
+  const config = { baseUrl: "https://wf.example.edu.cn", clientId: "cid" };
+  const keyring = createMemoryKeyring();
+  const nowSec = Math.floor(Date.now() / 1000);
+  const { service, account } = sessionAddress(config);
+
+  await keyring.setPassword(
+    service,
+    account,
+    JSON.stringify({
+      accessToken: "token-expired",
+      tokenType: "bearer",
+      obtainedAt: nowSec - 7200,
+      expiresAt: nowSec - 3600
+    })
+  );
+
+  const previous = process.env.DISABLE_EXPIRE_CHECK;
+  process.env.DISABLE_EXPIRE_CHECK = "1";
+  try {
+    const token = await loadValidAccessToken(config, keyring, nowSec * 1000);
+    assert.equal(token, "token-expired");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.DISABLE_EXPIRE_CHECK;
+    } else {
+      process.env.DISABLE_EXPIRE_CHECK = previous;
+    }
+  }
+});

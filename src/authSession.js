@@ -90,7 +90,10 @@ export async function loadValidAccessToken(config, keyring, nowMs = Date.now(), 
   if (!session) {
     return null;
   }
-  if (session.expiresAt && session.expiresAt <= nowMs + skewMs) {
+  const disableExpireCheck = ["1", "true", "yes", "on"].includes(
+    `${process.env.DISABLE_EXPIRE_CHECK || ""}`.toLowerCase()
+  );
+  if (!disableExpireCheck && session.expiresAt && session.expiresAt <= nowMs + skewMs) {
     return null;
   }
   return session.accessToken;

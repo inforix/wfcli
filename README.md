@@ -23,6 +23,8 @@ Implemented command:
 - `wfcli tasks done`
 - `wfcli tasks list`
 - `wfcli user profile`
+- `wfcli user positions`
+- `wfcli user department`
 
 ## Setup
 
@@ -81,6 +83,11 @@ npx wfcli apps list
 # Get current user profile
 npx wfcli user profile
 npx wfcli user profile --json
+# Get current user positions / departments (requires scope `triple`)
+npx wfcli user positions
+npx wfcli user positions --json
+npx wfcli user department
+npx wfcli user department --json
 
 # Get app definition (schema/fields) for building tasks start --data
 npx wfcli apps definition BKQDJ > bkqdj-definition.json
@@ -145,6 +152,7 @@ npx wfcli tasks execute "$TASK_ID" --action-code approve --remark "已处理"
 
 - `GET /infoplus/apis/v2/me/apps` (`apps list`, personal method)
 - `GET /infoplus/apis/v2/me/profile` (`user profile`)
+- `GET /infoplus/apis/v2/me/positions` (`user positions`, `user department`)
 - `GET /infoplus/apis/v2/me/tasks/todo`
 - `GET /infoplus/apis/v2/me/processes/doing`
 - `GET /infoplus/apis/v2/me/processes/done`
