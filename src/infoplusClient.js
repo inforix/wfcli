@@ -156,6 +156,49 @@ async function requestTokenWithBodyClient(config, fetchImpl) {
   };
 }
 
+async function requestRefreshTokenWithBasicAuth(config, refreshToken, fetchImpl) {
+  const response = await fetchImpl(tokenUrl(config.baseUrl), {
+    method: "POST",
+    headers: {
+      Authorization: toBasicAuth(config.clientId, config.clientSecret),
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json"
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    })
+  });
+
+  return {
+    status: response.status,
+    ok: response.ok,
+    payload: await parseJsonResponse(response)
+  };
+}
+
+async function requestRefreshTokenWithBodyClient(config, refreshToken, fetchImpl) {
+  const response = await fetchImpl(tokenUrl(config.baseUrl), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json"
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: config.clientId,
+      client_secret: config.clientSecret
+    })
+  });
+
+  return {
+    status: response.status,
+    ok: response.ok,
+    payload: await parseJsonResponse(response)
+  };
+}
+
 function extractAccessToken(result) {
   if (!result.payload?.access_token) {
     throw new Error(
@@ -218,6 +261,22 @@ export async function exchangeAuthorizationCode(config, code, redirectUri, fetch
   if (!bodyResult.ok || !bodyResult.payload?.access_token) {
     throw new Error(
       `Failed to exchange authorization code. BasicAuth status=${basicResult.status}, BodyAuth status=${bodyResult.status}, payload=${JSON.stringify(bodyResult.payload)}`
+    );
+  }
+
+  return bodyResult.payload;
+}
+
+export async function refreshAccessToken(config, refreshToken, fetchImpl = fetch) {
+  const basicResult = await requestRefreshTokenWithBasicAuth(config, refreshToken, fetchImpl);
+  if (basicResult.ok && basicResult.payload?.access_token) {
+    return basicResult.payload;
+  }
+
+  const bodyResult = await requestRefreshTokenWithBodyClient(config, refreshToken, fetchImpl);
+  if (!bodyResult.ok || !bodyResult.payload?.access_token) {
+    throw new Error(
+      `Failed to refresh access token. BasicAuth status=${basicResult.status}, BodyAuth status=${bodyResult.status}, payload=${JSON.stringify(bodyResult.payload)}`
     );
   }
 

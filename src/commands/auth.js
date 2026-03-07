@@ -3,8 +3,12 @@ import http from "node:http";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { resolveAuthLoginConfig } from "../config.js";
-import { buildAuthorizationCodeUrl, exchangeAuthorizationCode } from "../infoplusClient.js";
-import { saveOAuthSession } from "../authSession.js";
+import {
+  buildAuthorizationCodeUrl,
+  exchangeAuthorizationCode,
+  refreshAccessToken
+} from "../infoplusClient.js";
+import { loadOAuthSession, saveOAuthSession } from "../authSession.js";
 import { getDefaultKeyring } from "../keyring.js";
 
 const execFileAsync = promisify(execFile);
@@ -171,6 +175,35 @@ export async function runAuthLogin(options, deps = {}) {
   return session;
 }
 
+export async function runAuthRefreshToken(options, deps = {}) {
+  const fetchImpl = deps.fetchImpl || fetch;
+  const writer = deps.writer || process.stdout;
+  const env = deps.env || process.env;
+  const keyring = deps.keyring || getDefaultKeyring();
+
+  const config = resolveAuthLoginConfig(options, env);
+  const existingSession = await loadOAuthSession(config, keyring);
+
+  if (!existingSession) {
+    throw new Error('No OAuth session found in keyring. Run "wfcli auth login" first.');
+  }
+
+  if (!existingSession.refreshToken) {
+    throw new Error('Current OAuth session has no refresh_token. Run "wfcli auth login" first.');
+  }
+
+  const tokenPayload = await refreshAccessToken(config, existingSession.refreshToken, fetchImpl);
+  if (!tokenPayload.refresh_token) {
+    tokenPayload.refresh_token = existingSession.refreshToken;
+  }
+
+  const session = await saveOAuthSession(config, keyring, tokenPayload);
+  writer.write(
+    `Token refreshed successfully. Token saved to keyring (expires: ${formatExpiry(session.expiresAt)}).\n`
+  );
+  return session;
+}
+
 export function registerAuthCommands(program) {
   const authCommand = program.command("auth").description("Authentication commands");
 
@@ -184,5 +217,13 @@ export function registerAuthCommands(program) {
     )
     .action(async (options) => {
       await runAuthLogin(options);
+    });
+
+  authCommand
+    .command("refresh-token")
+    .description("Refresh access token via stored refresh_token and save token to keyring")
+    .option("--base-url <url>", "override WORKFLOW_BASE_URL")
+    .action(async (options) => {
+      await runAuthRefreshToken(options);
     });
 }

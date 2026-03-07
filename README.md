@@ -7,6 +7,7 @@ Workflow CLI for SHMTU InfoPlus.
 Implemented command:
 
 - `wfcli auth login`
+- `wfcli auth refresh-token`
 - `wfcli apps list`
 - `wfcli tasks todo`
 - `wfcli tasks execute <taskId>`
@@ -41,6 +42,9 @@ Optional:
 # Login once (opens browser, stores token in keyring)
 npx wfcli auth login
 
+# Refresh access token using stored refresh_token
+npx wfcli auth refresh-token
+
 # List current user's apps (from personal token)
 npx wfcli apps list
 
@@ -69,6 +73,7 @@ npx wfcli tasks execute 123456 --username alice
 - receives `code` on callback, then exchanges it via:
 - `POST /infoplus/oauth2/token`
 - saves `access_token` into OS keyring
+- `wfcli auth refresh-token` can refresh the stored token via `grant_type=refresh_token`
 
 `wfcli apps` and `wfcli tasks` then read this keyring token and call:
 
