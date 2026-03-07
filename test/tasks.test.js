@@ -88,11 +88,14 @@ test("runTasksTodo renders todo tasks from me-scoped endpoint", async () => {
   try {
     const tasks = await runTasksTodo({}, await makeDeps(baseUrl, writer));
     assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].taskId, "task-1");
     assert.equal(tasks[0].processUri, "/process/1001");
     assert.equal(tasks[0].name, "Process A");
     assert.equal(tasks[0].sourceUsername, "155212");
     assert.equal(tasks[0].date, "2023-11-14T22:21:40.000Z");
     const output = writer.read();
+    assert.match(output, /TASK_ID/);
+    assert.match(output, /task-1/);
     assert.match(output, /PROCESS_URI/);
     assert.match(output, /SOURCE_USERNAME/);
     assert.match(output, /2023-11-14T22:21:40.000Z/);
@@ -176,15 +179,15 @@ test("runTasksList returns todo + completed mixed rows", async () => {
   }
 });
 
-test("runTasksExecute falls back from /tasks/{id} to /task/{id}", async () => {
+test("runTasksExecute calls /task/{id} and forwards submit params", async () => {
   const { server, baseUrl } = await startMockServer({
-    "POST /infoplus/apis/v2/tasks/task-42": (_req, res) => {
-      res.statusCode = 404;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ error: "not found" }));
-    },
     "POST /infoplus/apis/v2/task/task-42": (_req, res, body) => {
       assert.match(body, /userId=alice/);
+      assert.match(body, /actionId=7/);
+      assert.match(body, /actionCode=approve/);
+      assert.match(body, /remark=ok/);
+      assert.match(body, /thing=thing-1/);
+      assert.match(body, /pickup=pickup-1/);
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ errno: 0, entities: [{ id: "task-42", ok: true }] }));
@@ -193,7 +196,18 @@ test("runTasksExecute falls back from /tasks/{id} to /task/{id}", async () => {
 
   const writer = createWriter();
   try {
-    const entities = await runTasksExecute("task-42", { username: "alice" }, await makeDeps(baseUrl, writer));
+    const entities = await runTasksExecute(
+      "task-42",
+      {
+        username: "alice",
+        actionId: "7",
+        actionCode: "approve",
+        remark: "ok",
+        thing: "thing-1",
+        pickup: "pickup-1"
+      },
+      await makeDeps(baseUrl, writer)
+    );
 
     assert.equal(entities.length, 1);
     assert.match(writer.read(), /Task task-42 execute request submitted/);
@@ -202,11 +216,19 @@ test("runTasksExecute falls back from /tasks/{id} to /task/{id}", async () => {
   }
 });
 
-test("runTasksExecute requires username for execute API", async () => {
-  const { server, baseUrl } = await startMockServer({});
+test("runTasksExecute works without username", async () => {
+  const { server, baseUrl } = await startMockServer({
+    "POST /infoplus/apis/v2/task/task-42": (_req, res, body) => {
+      assert.doesNotMatch(body, /userId=/);
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ errno: 0, entities: [{ id: "task-42", ok: true }] }));
+    }
+  });
+
   try {
-    const deps = await makeDeps(baseUrl);
-    await assert.rejects(() => runTasksExecute("task-42", {}, deps), /Missing username/);
+    const result = await runTasksExecute("task-42", {}, await makeDeps(baseUrl));
+    assert.equal(result[0].id, "task-42");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

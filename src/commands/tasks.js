@@ -11,6 +11,7 @@ import { getDefaultKeyring } from "../keyring.js";
 import { renderTable } from "../output.js";
 
 const TODO_COLUMNS = [
+  { key: "taskId", title: "TASK_ID" },
   { key: "processUri", title: "PROCESS_URI" },
   { key: "name", title: "NAME" },
   { key: "sourceUsername", title: "SOURCE_USERNAME" },
@@ -137,6 +138,7 @@ function normalizeDate(value) {
 
 function toTodoRows(tasks) {
   return tasks.map((task) => ({
+    taskId: firstDefined(task, ["id", "taskId"]),
     processUri: firstDefined(task, ["process.uri", "process.url", "uri", "url", "process.entry"]),
     name: firstDefined(task, ["process.name", "name"]),
     sourceUsername: firstDefined(task, [
@@ -228,13 +230,23 @@ export async function runTasksList(options, deps = {}) {
 
 export async function runTasksExecute(taskId, options, deps = {}) {
   const { fetchImpl, writer, keyring, config } = resolveTaskCommandContext(options, deps);
-  if (!config.username) {
-    throw new Error("Missing username. Provide --username or set WORKFLOW_USERNAME.");
-  }
   const accessToken = await fetchTokenForCommand(config, keyring);
   let entities;
   try {
-    entities = await executeTask(config, config.username, taskId, accessToken, fetchImpl);
+    entities = await executeTask(
+      config,
+      taskId,
+      accessToken,
+      {
+        userId: options.username || config.username,
+        actionId: options.actionId,
+        actionCode: options.actionCode,
+        remark: options.remark,
+        thing: options.thing,
+        pickup: options.pickup
+      },
+      fetchImpl
+    );
   } catch (error) {
     throw toLoginHintError(error);
   }
@@ -280,7 +292,12 @@ export function registerTasksCommands(program) {
   });
 
   addCommonOptions(tasksCommand.command("execute <taskId>").description("Execute a task by id"))
-    .option("--username <username>", "target username (defaults to WORKFLOW_USERNAME)")
+    .option("--username <username>", "optional userId for task submit (defaults to WORKFLOW_USERNAME)")
+    .option("--action-id <id>", "optional actionId for one-click action")
+    .option("--action-code <code>", "optional actionCode for one-click action")
+    .option("--remark <text>", "optional remark text")
+    .option("--thing <code>", "optional thing code")
+    .option("--pickup <code>", "optional pickup code")
     .action(async (taskId, options) => {
       await runTasksExecute(taskId, options);
     });

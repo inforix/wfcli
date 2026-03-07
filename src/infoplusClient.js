@@ -453,36 +453,44 @@ export async function fetchMyCompletedProcesses(config, accessToken, fetchImpl =
   );
 }
 
-export async function executeTask(config, username, taskId, accessToken, fetchImpl = fetch) {
+export async function executeTask(
+  config,
+  taskId,
+  accessToken,
+  { userId, actionId, actionCode, remark, thing, pickup } = {},
+  fetchImpl = fetch
+) {
   const encodedTaskId = encodeURIComponent(taskId);
-  const candidates = [`tasks/${encodedTaskId}`, `task/${encodedTaskId}`];
-  const errors = [];
-
-  for (const candidatePath of candidates) {
-    try {
-      return await requestInfoPlusEntities(
-        {
-          url: apiUrl(config.baseUrl, candidatePath),
-          method: "POST",
-          accessToken,
-          body: new URLSearchParams({ userId: username }),
-          errorContext: `Failed to execute task "${taskId}" via /${candidatePath}`
-        },
-        fetchImpl
-      );
-    } catch (error) {
-      errors.push(error);
-    }
+  const form = new URLSearchParams();
+  if (userId) {
+    form.set("userId", userId);
+  }
+  if (actionId !== undefined && actionId !== null && actionId !== "") {
+    form.set("actionId", `${actionId}`);
+  }
+  if (actionCode) {
+    form.set("actionCode", actionCode);
+  }
+  if (remark) {
+    form.set("remark", remark);
+  }
+  if (thing) {
+    form.set("thing", thing);
+  }
+  if (pickup) {
+    form.set("pickup", pickup);
   }
 
-  if (errors.some((error) => error?.requiresLogin)) {
-    const loginError = new Error("Access token is invalid or expired.");
-    loginError.requiresLogin = true;
-    throw loginError;
-  }
-
-  const details = errors.map((error) => error.message).join(" | ");
-  throw new Error(`Failed to execute task "${taskId}". ${details}`);
+  return requestInfoPlusEntities(
+    {
+      url: apiUrl(config.baseUrl, `task/${encodedTaskId}`),
+      method: "POST",
+      accessToken,
+      body: form,
+      errorContext: `Failed to execute task "${taskId}" via /task/${encodedTaskId}`
+    },
+    fetchImpl
+  );
 }
 
 async function requestFileApi(requestOptions, fetchImpl) {

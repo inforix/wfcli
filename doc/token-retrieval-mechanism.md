@@ -66,7 +66,7 @@ Flow:
    - token is expired (with 30s skew safety window)
 4. If token is valid, commands call InfoPlus APIs with `Authorization: Bearer <token>`.
    - Read-style task APIs use `/infoplus/apis/v2/me/...` and do not require `--username`.
-   - `tasks execute` still requires `username` for the POST `userId` parameter.
+   - `tasks execute` maps to `POST /infoplus/apis/v2/task/{id}`; `userId` is optional (can come from `--username` or `WORKFLOW_USERNAME`).
 5. If API returns token-related errors (e.g. access token invalid/expired/scope mismatch), command maps it to a login hint error.
 
 Important: runtime commands do not auto-refresh token. You can refresh manually with:

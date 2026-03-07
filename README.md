@@ -55,7 +55,7 @@ Required for `wfcli auth login`:
 Optional:
 
 - `WORKFLOW_AUTH_SCOPE` (default: `app+task+process+data+openid+profile`)
-- `WORKFLOW_USERNAME` (only used by `wfcli tasks execute`)
+- `WORKFLOW_USERNAME` (optional default `userId` for `wfcli tasks execute`)
 
 ## Usage
 
@@ -88,13 +88,18 @@ npx wfcli file update file-key-1 ./new-demo.txt --keep-name
 npx wfcli file delete file-key-1
 
 # Task commands
-# todo output columns: process uri, name, source username, date
+# todo output columns: taskId, process uri, name, source username, date
 npx wfcli tasks todo
 npx wfcli tasks doing
 npx wfcli tasks done
 npx wfcli tasks list
-# execute still needs a username for POST body userId
+# execute maps to [3.1] POST /task/{id}
 npx wfcli tasks execute 123456 --username alice
+npx wfcli tasks execute 123456 --action-code approve --remark "已确认"
+
+# find taskId by name then execute
+TASK_ID=$(npx wfcli tasks todo --json | jq -r '.[] | select(.name|contains("补考勤登记")) | .taskId' | head -n1)
+npx wfcli tasks execute "$TASK_ID" --action-code approve --remark "已处理"
 ```
 
 ## OAuth2 flow
