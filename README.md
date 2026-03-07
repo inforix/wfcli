@@ -8,6 +8,7 @@ Implemented command:
 
 - `wfcli auth login`
 - `wfcli auth refresh-token`
+- `wfcli version`
 - `wfcli apps list`
 - `wfcli tasks todo`
 - `wfcli tasks execute <taskId>`
@@ -53,6 +54,10 @@ npx wfcli apps list --base-url https://xjtu.shmtu.edu.cn
 
 # Machine-readable output
 npx wfcli apps list --json
+
+# Version
+npx wfcli version
+npx wfcli --version
 
 # Task commands
 # todo output columns: process uri, name, source username, date
