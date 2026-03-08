@@ -47,13 +47,14 @@ updated = updated.replace(
     '  find ./npm -maxdepth 5 -type f -print',
     '  exit 1',
     'fi',
+    'publish_path="$(realpath "$publish_path")"',
     'tmpdir="$(mktemp -d)"',
     'tar -xzf "$publish_path" -C "$tmpdir"',
     'pkg_name="$(jq -r \'.name\' \"$tmpdir/package/package.json\")"',
     'if [ "$pkg_name" != "infopluscli" ]; then',
     '  jq \'.name = "infopluscli"\' "$tmpdir/package/package.json" > "$tmpdir/package/package.json.tmp"',
     '  mv "$tmpdir/package/package.json.tmp" "$tmpdir/package/package.json"',
-    '  (cd "$tmpdir" && tar -czf "$publish_path" package)',
+    '  tar -C "$tmpdir" -czf "$publish_path" package',
     'fi',
     'npm publish --provenance --access public "$publish_path"'
   ]
