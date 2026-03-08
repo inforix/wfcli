@@ -44,6 +44,18 @@ updated = updated.replace(
 );
 
 updated = updated.replace(
+  /      - uses: actions\/setup-node@v6\n        with:\n          node-version: '20\.x'\n          registry-url: 'https:\/\/registry\.npmjs\.org'\n/,
+  [
+    "      - uses: actions/setup-node@v6",
+    "        with:",
+    "          node-version: '20.x'",
+    "      - run: |",
+    "          node --version",
+    "          npm --version"
+  ].join("\n") + "\n"
+);
+
+updated = updated.replace(
   /npm publish(?: --provenance)? --access public "\.\/npm\/\$\{pkg\}"/,
   [
     'unset NODE_AUTH_TOKEN',
@@ -63,13 +75,13 @@ updated = updated.replace(
     'publish_path="$(realpath "$publish_path")"',
     'tmpdir="$(mktemp -d)"',
     'tar -xzf "$publish_path" -C "$tmpdir"',
-    'pkg_name="$(jq -r \'.name\' \"$tmpdir/package/package.json\")"',
+    'pkg_dir="$tmpdir/package"',
+    'pkg_name="$(jq -r \'.name\' \"$pkg_dir/package.json\")"',
     'if [ "$pkg_name" != "infopluscli" ]; then',
-    '  jq \'.name = "infopluscli"\' "$tmpdir/package/package.json" > "$tmpdir/package/package.json.tmp"',
-    '  mv "$tmpdir/package/package.json.tmp" "$tmpdir/package/package.json"',
-    '  tar -C "$tmpdir" -czf "$publish_path" package',
+    '  jq \'.name = "infopluscli"\' "$pkg_dir/package.json" > "$pkg_dir/package.json.tmp"',
+    '  mv "$pkg_dir/package.json.tmp" "$pkg_dir/package.json"',
     'fi',
-    'npm publish --provenance --access public "$publish_path"'
+    'npm publish --provenance --access public --registry https://registry.npmjs.org "$pkg_dir"'
   ]
     .map((line, idx) => (idx === 0 ? line : `            ${line}`))
     .join("\n")
