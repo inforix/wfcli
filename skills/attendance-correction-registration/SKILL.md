@@ -1,83 +1,114 @@
 ---
 name: attendance-correction-registration
-description: Handle SHMTU InfoPlus attendance correction registration (考勤补登记) with `wfcli`, including login, app field discovery, process start/submit, and troubleshooting for scope/token/data issues.
+description: Directly submit SHMTU InfoPlus attendance correction registration (考勤补登记) with `wfcli` by auto-fetching user fields and starting + submitting in one pass.
 ---
 
 # Attendance Correction Registration
 
 ## Overview
-Use this skill when users ask to submit or troubleshoot **attendance correction registration** (补考勤登记) in SHMTU InfoPlus.
+Use this skill when users ask to submit or troubleshoot **attendance correction registration** (考勤补登记) in SHMTU InfoPlus.
+Prefer **direct mode**: one start command + immediate submit. Only use draft/extra discovery when required.
 
-## Workflow
-1. Verify prerequisites
+## Direct Mode (Default)
+1. Verify runtime and token status
 - Ensure project root is `wfcli`.
-- Ensure env has `WORKFLOW_CLIENT_ID`, `WORKFLOW_BASE_URL`, `WORKFLOW_CLIENT_SECRET`.
+- Ensure env has `WORKFLOW_CLIENT_ID`, `WORKFLOW_BASE_URL`.
+- Check token first:
+```bash
+npx wfcli auth show-token --json
+```
+- If token exists and valid, continue.
+- If no token/session, login with required scopes:
+```bash
+npx wfcli auth login --scope "profile data openid app process task start process_edit app_edit triple"
+```
 
-2. Authenticate
-- First-time or expired token:
+2. Collect required user fields automatically
+- Fetch profile and first department:
 ```bash
-npx wfcli auth login --scope "profile data openid app process task start process_edit app_edit"
+npx wfcli user profile --json
+npx wfcli user department --json
 ```
-- If token exists but expired:
+- Map values:
+`<bm>`: department code (`department[0].code`)
+`<bm_name>`: department name (`department[0].name`)
+`<gh>`: account/username from profile (`account | username | userName`)
+`<xm>`: name from profile (`name | displayName`)
+
+3. Build payload
+- Required from user:
+  - `<correction_date>` -> `fieldBDJRQ` (unix timestamp in seconds, sent as single-item array)
+  - `<reason>` -> `fieldBDJRGZQK` (sent as single-item array)
+  - `<location>` -> `fieldKQQY` and `fieldKQQY_Name` (same value, each sent as single-item array)
+- `<sqrq>`: current unix timestamp (seconds).
+- Location rule (strict):
+  - `fieldKQQY` and `fieldKQQY_Name` must be the same value.
+  - Value must be one of:
+    - `临港校区`
+    - `上海国际航运研究中心`
+    - `上海海大资产经营有限公司`
+    - `上海港湾学校（继续教育学院）`
+    - `高恒大厦`
+
+4. Pre-submit validation checklist (must pass before calling `tasks start`)
+- Token check passed; if missing token, `auth login` completed.
+- `fieldBDJRQ` provided and is unix seconds (not milliseconds), wrapped as single-item array.
+- `fieldBDJRGZQK` provided and non-empty, wrapped as single-item array.
+- `fieldKQQY` provided and value is in allowed options.
+- `fieldKQQY_Name` exactly equals `fieldKQQY`.
+- Auto-filled fields resolved:
+  - `fieldBM`, `fieldBM_Name`
+  - `fieldGH`, `fieldXM`
+  - `fieldSQRQ` (current unix seconds)
+  - `fieldXH` (`["1"]`)
+
+5. Start and submit directly (no draft)
 ```bash
-npx wfcli auth refresh-token
+npx wfcli tasks start --code BKQ --submit-action-code Submit --data '{"fieldBM":"<bm>","fieldBM_Name":"<bm_name>","fieldGH":"<gh>","fieldXM":"<xm>","fieldSQRQ":<sqrq>,"fieldXH":["1"],"fieldBDJRQ":[<correction_date>],"fieldBDJRGZQK":["<reason>"],"fieldKQQY":["<location>"],"fieldKQQY_Name":["<location>"]}'
 ```
 
-3. Confirm app and fields
-- Check available apps:
+Known sample (provided by user):
 ```bash
-npx wfcli apps list --json
+npx wfcli tasks start --code BKQ --submit-action-code Submit --data '{"fieldBM":"200300","fieldBM_Name":"教务处","fieldGH":"993333","fieldXM":"王玉平","fieldSQRQ":1772874290,"fieldXH":["1"],"fieldBDJRQ":[1772596800],"fieldBDJRGZQK":["正常上班，漏考勤"],"fieldKQQY":["临港校区"],"fieldKQQY_Name":["临港校区"]}'
 ```
-- Inspect attendance correction app schema (commonly `BKQ`):
+
+6. Validate outcome
 ```bash
+npx wfcli tasks doing --json
+npx wfcli tasks done --json
+```
+
+## Fallback Workflow (Only When Needed)
+Use this only if direct submission fails due to field mismatch/tenant customization.
+
+1. Discover app/schema:
+```bash
+npx wfcli apps list --json | jq '.[] | {code,name}'
 npx wfcli apps definition BKQ | jq '.currentVersion.schema.fields'
-```
-- Build `--data` using **field codes** from schema output.
-
-4. get user profile and department
-
-you can use `npx wfcli user profile` to get user profile info, `npx wfcli user department` to get department info, including department and name, which are needed for the process data payload.
-
-<bm>: 部门代码
-<bm_name>: 部门名称
-<gh>: 申请人工号
-<xm>: 申请人姓名
-
-5. Start attendance correction process
-
-<reason>: if user doesn't specify the reason, then set a default value like "正常上班，漏考勤" to ensure the process can be started without validation errors.
-
-<correction_date>: user must speicify the correction date, it's a unixtime long value (not milliseconds).
-
-<location>: if user doesn't specify the location, then set a default value like "临港校区" to ensure the process can be started without validation errors.
-
-<sqrq>: 申请日期（unixtime long, in seconds, not milliseconds）
-
-```bash
-npx wfcli tasks start --code BKQ --submit-action-code "Submit" --data '{"fieldBM": "<bm>", "fieldBM_Name": "<bm_name>", "fieldGH": "<gh>", "fieldXM": "<xm>", "fieldSQRQ": <sqrq>, "fieldXH":["1"], "fieldBDJRQ": [<correction_date>], "fieldBDJRGZQK":["<reason>"], "fieldKQQY":["<location>"], "fieldKQQY_Name":["<location>"]}'
+npx wfcli apps definition BKQDJ | jq '.currentVersion.schema.fields'
 ```
 
-
-5. Validate result
-- Check running/completed process:
+2. If user explicitly asks to save draft first:
 ```bash
-npx wfcli tasks doing
-npx wfcli tasks done
+npx wfcli tasks start --code BKQ --no-submit --data '<data-json>'
+npx wfcli tasks execute <taskId> --action-code Submit
 ```
 
 ## Intent Mapping
-- "补考勤登记" / "attendance correction" / "missed punch fix" -> `tasks start --code BKQ --data ...`
+- "补考勤登记" / "attendance correction" / "missed punch fix" -> direct start+submit (`tasks start --submit-action-code Submit`)
 - "先保存草稿" / "draft first" -> `tasks start --no-submit ...`
-- "提交这个补考勤" / "submit this request" -> `tasks execute <taskId> --action-code TJ`
+- "提交这个补考勤" / "submit this request" -> `tasks execute <taskId> --action-code Submit`
 - "查我填了什么" / "check status" -> `tasks doing` / `tasks done`
 
 ## Troubleshooting
 - `No valid OAuth token found in keyring`:
-  run `npx wfcli auth login`.
-- `Access token scope is invalid`:
-  re-login with explicit scope string above.
+  run `npx wfcli auth login` (only needed when token is missing).
+- `ACCESS_TOKEN_SCOPE_INVALID` for department/profile:
+  re-login with `triple` scope included.
 - `Invalid --data JSON`:
-  re-check app definition and rebuild payload with field codes.
+  rebuild payload as valid JSON string and retry.
+- `InfoPlus API error` with unknown field codes:
+  run fallback schema discovery and rebuild payload using real field codes.
 - `Failed to call process start API` or `fetch failed`:
   verify `WORKFLOW_BASE_URL`, campus VPN/network reachability.
 

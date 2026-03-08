@@ -1,4 +1,4 @@
 interface:
   display_name: "Attendance Correction Registration"
-  short_description: "Submit and troubleshoot 补考勤登记 via wfcli"
-  default_prompt: "Use this skill to complete SHMTU InfoPlus attendance correction registration (补考勤登记) with wfcli, including schema discovery, process start/submit, and error handling."
+  short_description: "Directly submit 补考勤登记 (BKQ) via wfcli"
+  default_prompt: "Use this skill in direct mode: if no token exists, run `wfcli auth login`; otherwise skip login. Require user inputs `fieldBDJRQ`, `fieldBDJRGZQK`, and `fieldKQQY`. Before submit, validate required fields and constraints (`fieldKQQY_Name` must equal `fieldKQQY`, and value must be in allowed options). Auto-fill other fields from `wfcli user profile --json` and `wfcli user department --json`, then run `wfcli tasks start --code BKQ --submit-action-code Submit --data ...`."
