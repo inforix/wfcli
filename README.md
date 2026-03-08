@@ -70,9 +70,8 @@ Release is tag-driven (not push-to-main driven):
 3. `cargo-dist` uploads release artifacts to GitHub Releases.
 4. Workflow publishes generated npm installer package(s).
 
-Required GitHub repository secret:
-
-- `NPM_TOKEN`: npm automation token with publish permission
+GitHub Actions npm publish is configured for npm Trusted Publishing (OIDC).
+No `NPM_TOKEN` secret is required.
 
 Set these values in `.env`:
 

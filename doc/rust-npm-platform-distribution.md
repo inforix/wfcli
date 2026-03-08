@@ -27,14 +27,16 @@ npm run rust:build
 1. Create and push a semver tag, for example: `v0.1.0`.
 2. GitHub Actions `Release` workflow runs `dist plan/build/host`.
 3. Artifacts are uploaded to GitHub Releases.
-4. npm installer package tarballs are published to npm (via `NPM_TOKEN`).
+4. npm installer package tarballs are published to npm via Trusted Publishing (OIDC).
 
-## Required Secret
+## Auth Configuration
 
-- `NPM_TOKEN`: npm automation token with publish permissions.
+- No `NPM_TOKEN` secret is required.
+- `publish-npm` job uses `id-token: write` and `npm publish --provenance`.
+- Configure npm Trusted Publishing for this GitHub repository/package in npmjs settings.
 
 ## Notes
 
 - Targets are configured in `dist-workspace.toml` (`[dist].targets`).
 - npm publishing is enabled by `[dist].publish-jobs = ["npm"]`.
-- If you change dist settings, run `npm run dist:generate` and commit the updated workflow.
+- `npm run dist:generate` runs `dist generate` and then patches workflow for Trusted Publishing.

@@ -16,7 +16,7 @@
     "test": "cargo test -p wfcli",
     "rust:build": "cargo build --release -p wfcli",
     "rust:run": "cargo run -p wfcli --",
-    "dist:generate": "dist generate",
+    "dist:generate": "dist generate && node scripts/patch-dist-workflow.mjs",
     "dist:plan": "dist plan --output-format=json"
   },
   "keywords": [],

@@ -31,7 +31,7 @@ Guidance for Codex and other coding agents working in this repository.
   - `npm run rust:run -- user department --json`
 - Distribution:
   - `npm run dist:plan`
-  - `npm run dist:generate`
+  - `npm run dist:generate` (includes Trusted Publishing workflow patch)
 
 ## Repository Conventions
 - Keep behavior aligned with existing command patterns in `crates/wfcli/src/main.rs`.
