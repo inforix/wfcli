@@ -15,19 +15,19 @@ Prefer **direct mode**: one start command + immediate submit. Only use draft/ext
 - Ensure env has `WORKFLOW_CLIENT_ID`, `WORKFLOW_BASE_URL`.
 - Check token first:
 ```bash
-npx wfcli auth show-token --json
+wfcli auth show-token --json
 ```
 - If token exists and valid, continue.
 - If no token/session, login with required scopes:
 ```bash
-npx wfcli auth login --scope "profile data openid app process task start process_edit app_edit triple"
+wfcli auth login --scope "profile data openid app process task start process_edit app_edit triple"
 ```
 
 2. Collect required user fields automatically
 - Fetch profile and first department:
 ```bash
-npx wfcli user profile --json
-npx wfcli user department --json
+wfcli user profile --json
+wfcli user department --json
 ```
 - Map values:
 `<bm>`: department code (`department[0].code`)
@@ -64,18 +64,18 @@ npx wfcli user department --json
 
 5. Start and submit directly (no draft)
 ```bash
-npx wfcli tasks start --code BKQ --submit-action-code Submit --data '{"fieldBM":"<bm>","fieldBM_Name":"<bm_name>","fieldGH":"<gh>","fieldXM":"<xm>","fieldSQRQ":<sqrq>,"fieldXH":["1"],"fieldBDJRQ":[<correction_date>],"fieldBDJRGZQK":["<reason>"],"fieldKQQY":["<location>"],"fieldKQQY_Name":["<location>"]}'
+wfcli tasks start --code BKQ --submit-action-code Submit --data '{"fieldBM":"<bm>","fieldBM_Name":"<bm_name>","fieldGH":"<gh>","fieldXM":"<xm>","fieldSQRQ":<sqrq>,"fieldXH":["1"],"fieldBDJRQ":[<correction_date>],"fieldBDJRGZQK":["<reason>"],"fieldKQQY":["<location>"],"fieldKQQY_Name":["<location>"]}'
 ```
 
 Known sample (provided by user):
 ```bash
-npx wfcli tasks start --code BKQ --submit-action-code Submit --data '{"fieldBM":"200300","fieldBM_Name":"教务处","fieldGH":"993333","fieldXM":"王玉平","fieldSQRQ":1772874290,"fieldXH":["1"],"fieldBDJRQ":[1772596800],"fieldBDJRGZQK":["正常上班，漏考勤"],"fieldKQQY":["临港校区"],"fieldKQQY_Name":["临港校区"]}'
+wfcli tasks start --code BKQ --submit-action-code Submit --data '{"fieldBM":"200300","fieldBM_Name":"教务处","fieldGH":"993333","fieldXM":"王玉平","fieldSQRQ":1772874290,"fieldXH":["1"],"fieldBDJRQ":[1772596800],"fieldBDJRGZQK":["正常上班，漏考勤"],"fieldKQQY":["临港校区"],"fieldKQQY_Name":["临港校区"]}'
 ```
 
 6. Validate outcome
 ```bash
-npx wfcli tasks doing --json
-npx wfcli tasks done --json
+wfcli tasks doing --json
+wfcli tasks done --json
 ```
 
 ## Fallback Workflow (Only When Needed)
@@ -83,15 +83,15 @@ Use this only if direct submission fails due to field mismatch/tenant customizat
 
 1. Discover app/schema:
 ```bash
-npx wfcli apps list --json | jq '.[] | {code,name}'
-npx wfcli apps definition BKQ | jq '.currentVersion.schema.fields'
-npx wfcli apps definition BKQDJ | jq '.currentVersion.schema.fields'
+wfcli apps list --json | jq '.[] | {code,name}'
+wfcli apps definition BKQ | jq '.currentVersion.schema.fields'
+wfcli apps definition BKQDJ | jq '.currentVersion.schema.fields'
 ```
 
 2. If user explicitly asks to save draft first:
 ```bash
-npx wfcli tasks start --code BKQ --no-submit --data '<data-json>'
-npx wfcli tasks execute <taskId> --action-code Submit
+wfcli tasks start --code BKQ --no-submit --data '<data-json>'
+wfcli tasks execute <taskId> --action-code Submit
 ```
 
 ## Intent Mapping
@@ -102,7 +102,7 @@ npx wfcli tasks execute <taskId> --action-code Submit
 
 ## Troubleshooting
 - `No valid OAuth token found in keyring`:
-  run `npx wfcli auth login` (only needed when token is missing).
+  run `wfcli auth login` (only needed when token is missing).
 - `ACCESS_TOKEN_SCOPE_INVALID` for department/profile:
   re-login with `triple` scope included.
 - `Invalid --data JSON`:
@@ -115,6 +115,6 @@ npx wfcli tasks execute <taskId> --action-code Submit
 ## References
 - Load [references/command-cheatsheet.md](references/command-cheatsheet.md) for copy-ready commands.
 - Source-of-truth code:
-  - `src/commands/tasks.js`
-  - `src/commands/apps.js`
-  - `src/commands/auth.js`
+  - `crates/wfcli/src/main.rs`
+  - `crates/wfcli/src/errors.rs`
+  - `crates/wfcli/src/config.rs`

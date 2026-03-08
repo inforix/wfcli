@@ -23,15 +23,15 @@ Follow this sequence unless the user asks for a single command only.
 ```bash
 cp .env.example .env
 npm install
-npx wfcli auth login
-npx wfcli apps list
-npx wfcli tasks todo
+wfcli auth login
+wfcli apps list
+wfcli tasks todo
 ```
 
 3. Authenticate before protected commands
-- Run `npx wfcli auth login` for first-time access.
-- Run `npx wfcli auth refresh-token` when token expires.
-- Run `npx wfcli auth show-token --json` when user asks to inspect token state.
+- Run `wfcli auth login` for first-time access.
+- Run `wfcli auth refresh-token` when token expires.
+- Run `wfcli auth show-token --json` when user asks to inspect token state.
 
 4. Drive app and process workflows
 - Use `apps list` to discover app codes.
@@ -45,17 +45,22 @@ npx wfcli tasks todo
 6. Prefer machine-readable output when automation is likely
 - Add `--json` for commands whose output may be piped into scripts.
 
+7. If user asks about release/publish pipeline
+- Use `npm run dist:plan` to inspect cargo-dist release plan.
+- Use `npm run dist:generate` to regenerate release workflow.
+- Explain npm publishing uses Trusted Publishing (OIDC), so `NPM_TOKEN` is not required.
+
 ## Command Selection Rules
 Use this mapping for user intent.
 
-- "show my apps" -> `npx wfcli apps list`
-- "show app schema/fields" -> `npx wfcli apps definition <idc>`
-- "show my pending tasks" -> `npx wfcli tasks todo`
-- "show in-progress processes" -> `npx wfcli tasks doing`
-- "show completed work" -> `npx wfcli tasks done` or `npx wfcli tasks list`
-- "start a process" -> `npx wfcli tasks start --code <code> --data '<json>'`
-- "submit/approve a task" -> `npx wfcli tasks execute <taskId> --action-code <code>`
-- "upload/download workflow file" -> `npx wfcli file upload ...` / `npx wfcli file download ...`
+- "show my apps" -> `wfcli apps list`
+- "show app schema/fields" -> `wfcli apps definition <idc>`
+- "show my pending tasks" -> `wfcli tasks todo`
+- "show in-progress processes" -> `wfcli tasks doing`
+- "show completed work" -> `wfcli tasks done` or `wfcli tasks list`
+- "start a process" -> `wfcli tasks start --code <code> --data '<json>'`
+- "submit/approve a task" -> `wfcli tasks execute <taskId> --action-code <code>`
+- "upload/download workflow file" -> `wfcli file upload ...` / `wfcli file download ...`
 
 ## Troubleshooting Playbook
 Apply targeted fixes based on known error patterns.
@@ -63,9 +68,9 @@ Apply targeted fixes based on known error patterns.
 - `Missing required environment variables`:
   Set the missing `WORKFLOW_*` values in `.env` or shell.
 - `No valid OAuth token found in keyring`:
-  Run `npx wfcli auth login`.
+  Run `wfcli auth login`.
 - `Access token scope is invalid`:
-  Run `npx wfcli auth login --scope "profile data openid app process task start process_edit app_edit"`.
+  Run `wfcli auth login --scope "profile data openid app process task start process_edit app_edit"`.
 - `Failed to call process start API` or `fetch failed`:
   Verify `WORKFLOW_BASE_URL`, network, and VPN reachability.
 - `Invalid --data JSON`:
@@ -80,7 +85,9 @@ Apply targeted fixes based on known error patterns.
 Load [references/command-cheatsheet.md](references/command-cheatsheet.md) for compact command examples.
 When behavior is unclear, read local source-of-truth files in this repo:
 - `README.md`
-- `src/commands/auth.js`
-- `src/commands/apps.js`
-- `src/commands/tasks.js`
-- `src/commands/file.js`
+- `crates/wfcli/src/main.rs`
+- `crates/wfcli/src/errors.rs`
+- `crates/wfcli/src/config.rs`
+- `crates/wfcli/src/session.rs`
+- `dist-workspace.toml`
+- `.github/workflows/release.yml`

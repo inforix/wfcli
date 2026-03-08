@@ -2,19 +2,19 @@
 
 ## 1. Token First
 ```bash
-npx wfcli auth show-token --json
+wfcli auth show-token --json
 ```
 
 ## 2. Login/Refresh If Needed
 ```bash
-npx wfcli auth login --scope "profile data openid app process task start process_edit app_edit triple"
+wfcli auth login --scope "profile data openid app process task start process_edit app_edit triple"
 ```
 Note: `auth login` is only required when there is no valid token.
 
 ## 3. Fetch user fields (for payload)
 ```bash
-npx wfcli user profile --json
-npx wfcli user department --json
+wfcli user profile --json
+wfcli user department --json
 ```
 
 ## 4. Known Working BKQ Payload (sample)
@@ -52,18 +52,19 @@ Location constraints:
 
 ## 6. Direct Start + Submit (default)
 ```bash
-npx wfcli tasks start --code BKQ --submit-action-code Submit --data "$DATA"
+wfcli tasks start --code BKQ --submit-action-code Submit --data "$DATA"
 ```
+Note: `--submit-action-code` is fixed to `Submit` for this skill.
 
 ## 7. Status checks
 ```bash
-npx wfcli tasks doing --json
-npx wfcli tasks done --json
+wfcli tasks doing --json
+wfcli tasks done --json
 ```
 
 ## 8. Fallback (only if direct flow fails)
 ```bash
-npx wfcli apps definition BKQ | jq '.currentVersion.schema.fields'
-npx wfcli tasks start --code BKQ --no-submit --data "$DATA"
-npx wfcli tasks execute <taskId> --action-code Submit
+wfcli apps definition BKQ | jq '.currentVersion.schema.fields'
+wfcli tasks start --code BKQ --no-submit --data "$DATA"
+wfcli tasks execute <taskId> --action-code Submit
 ```
