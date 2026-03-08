@@ -48,10 +48,12 @@ updated = updated.replace(
   [
     "      - uses: actions/setup-node@v6",
     "        with:",
-    "          node-version: '20.x'",
+    "          node-version: '24.x'",
     "      - run: |",
     "          node --version",
-    "          npm --version"
+    "          npm --version",
+    "          node -e 'const [maj,min]=process.versions.node.split(\".\").map(Number); if (maj < 22 || (maj===22 && min < 14)) { process.exit(1) }'",
+    "          npm -v | awk -F. '{ if (($1+0) < 11 || (($1+0) == 11 && ($2+0) < 5)) exit 1 }'"
   ].join("\n") + "\n"
 );
 
