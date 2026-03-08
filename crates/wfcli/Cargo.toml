@@ -3,6 +3,7 @@ name = "wfcli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository = "https://github.com/inforix/wfcli"
 
 [[bin]]
 name = "wfcli"

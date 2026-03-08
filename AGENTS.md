@@ -29,6 +29,9 @@ Guidance for Codex and other coding agents working in this repository.
   - `npm run rust:run -- user profile --json`
   - `npm run rust:run -- user positions --json`
   - `npm run rust:run -- user department --json`
+- Distribution:
+  - `npm run dist:plan`
+  - `npm run dist:generate`
 
 ## Repository Conventions
 - Keep behavior aligned with existing command patterns in `crates/wfcli/src/main.rs`.
@@ -49,3 +52,5 @@ Guidance for Codex and other coding agents working in this repository.
 - Runtime config: `crates/wfcli/src/config.rs`
 - Auth session/token logic: `crates/wfcli/src/session.rs`
 - Errors and login hints: `crates/wfcli/src/errors.rs`
+- Dist config: `dist-workspace.toml`
+- Release workflow (generated): `.github/workflows/release.yml`

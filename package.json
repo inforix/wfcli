@@ -16,7 +16,8 @@
     "test": "cargo test -p wfcli",
     "rust:build": "cargo build --release -p wfcli",
     "rust:run": "cargo run -p wfcli --",
-    "pkg:generate-platform": "node scripts/generate-platform-npm-packages.mjs"
+    "dist:generate": "dist generate",
+    "dist:plan": "dist plan --output-format=json"
   },
   "keywords": [],
   "author": "",

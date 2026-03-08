@@ -51,30 +51,28 @@ npm run rust:build
 ./target/release/wfcli --help
 ```
 
-## Rust Distribution
+## Rust Distribution (cargo-dist)
 
-This repo now uses Rust as the CLI implementation and npm as distribution.
+This repo uses `cargo-dist` for release automation and npm publishing.
 
-- Source: `crates/wfcli`
-- Build: `npm run rust:build`
-- Run (dev): `npm run rust:run -- --help`
-- Platform package guide: `doc/rust-npm-platform-distribution.md`
+- Distribution config: `dist-workspace.toml`
+- Generated CI workflow: `.github/workflows/release.yml`
+- Local planning command: `npm run dist:plan`
+- Regenerate CI from dist config: `npm run dist:generate`
+- Full guide: `doc/rust-npm-platform-distribution.md`
 
-## Automatic npm publish on push
+## Release and npm publish
 
-This repo publishes platform-specific npm packages and a main launcher package on every push to `main` via GitHub Actions.
+Release is tag-driven (not push-to-main driven):
+
+1. Create and push a semver tag like `v0.1.0`.
+2. GitHub Actions `Release` workflow builds artifacts for configured targets.
+3. `cargo-dist` uploads release artifacts to GitHub Releases.
+4. Workflow publishes generated npm installer package(s).
 
 Required GitHub repository secret:
 
-- `NPM_TOKEN`: npm automation token with publish permission for this package
-
-The workflow automatically:
-
-- builds Rust binaries for release targets
-- bumps patch version (`npm version patch`)
-- generates npm publish directories under `dist/npm`
-- publishes platform packages first, then the main launcher package
-- creates and pushes release tag/commit back to `main`
+- `NPM_TOKEN`: npm automation token with publish permission
 
 Set these values in `.env`:
 

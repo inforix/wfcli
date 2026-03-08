@@ -6,3 +6,8 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "ISC"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
