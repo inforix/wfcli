@@ -304,10 +304,16 @@ jobs:
       - run: |
           for release in $(echo "$PLAN" | jq --compact-output '.releases[] | select([.artifacts[] | endswith("-npm-package.tar.gz")] | any)'); do
             pkg=$(echo "$release" | jq '.artifacts[] | select(endswith("-npm-package.tar.gz"))' --raw-output)
-            publish_path="./npm/${pkg}"
-            if [ "$pkg" = "wfcli-npm-package.tar.gz" ]; then
-              tmpdir="$(mktemp -d)"
-              tar -xzf "$publish_path" -C "$tmpdir"
+            publish_path="$(find ./npm -type f -name "$pkg" | head -n 1)"
+            if [ -z "$publish_path" ]; then
+              echo "unable to locate npm package artifact: $pkg"
+              find ./npm -maxdepth 5 -type f -print
+              exit 1
+            fi
+            tmpdir="$(mktemp -d)"
+            tar -xzf "$publish_path" -C "$tmpdir"
+            pkg_name="$(jq -r '.name' "$tmpdir/package/package.json")"
+            if [ "$pkg_name" != "infopluscli" ]; then
               jq '.name = "infopluscli"' "$tmpdir/package/package.json" > "$tmpdir/package/package.json.tmp"
               mv "$tmpdir/package/package.json.tmp" "$tmpdir/package/package.json"
               (cd "$tmpdir" && tar -czf "$publish_path" package)
