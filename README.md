@@ -2,9 +2,9 @@
 
 Workflow CLI for SHMTU InfoPlus.
 
-## Stage 1
+## Commands
 
-Implemented command:
+Implemented command set:
 
 - `wfcli auth login`
 - `wfcli auth refresh-token`
@@ -33,9 +33,36 @@ npm install
 cp .env.example .env
 ```
 
+## Rust CLI Source
+
+The CLI logic has been migrated to Rust source under `crates/wfcli`.
+
+Run directly from source:
+
+```bash
+npm run rust:run -- --help
+npm run rust:run -- auth show-token --json
+```
+
+Build release binary:
+
+```bash
+npm run rust:build
+./target/release/wfcli --help
+```
+
+## Rust Distribution
+
+This repo now uses Rust as the CLI implementation and npm as distribution.
+
+- Source: `crates/wfcli`
+- Build: `npm run rust:build`
+- Run (dev): `npm run rust:run -- --help`
+- Platform package guide: `doc/rust-npm-platform-distribution.md`
+
 ## Automatic npm publish on push
 
-This repo is configured to publish to npm on every push to `main` via GitHub Actions.
+This repo publishes platform-specific npm packages and a main launcher package on every push to `main` via GitHub Actions.
 
 Required GitHub repository secret:
 
@@ -43,10 +70,11 @@ Required GitHub repository secret:
 
 The workflow automatically:
 
+- builds Rust binaries for release targets
 - bumps patch version (`npm version patch`)
-- creates a git tag
-- publishes to npm
-- pushes commit and tag back to `main`
+- generates npm publish directories under `dist/npm`
+- publishes platform packages first, then the main launcher package
+- creates and pushes release tag/commit back to `main`
 
 Set these values in `.env`:
 
