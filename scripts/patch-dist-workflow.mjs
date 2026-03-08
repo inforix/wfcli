@@ -9,6 +9,11 @@ const original = readFileSync(workflowPath, "utf8");
 let updated = original;
 
 updated = updated.replace(
+  "host --steps=create --tag={0}",
+  "host --allow-dirty --steps=create --tag={0}"
+);
+
+updated = updated.replace(
   /(  publish-npm:\n[\s\S]*?    runs-on: "ubuntu-22\.04"\n)(?!    permissions:\n)/,
   `$1    permissions:\n      "id-token": "write"\n      "contents": "read"\n`
 );
