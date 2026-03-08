@@ -16,6 +16,7 @@
 name: Release
 permissions:
   "contents": "write"
+  "id-token": "write"
 
 # This task will run whenever you push a git tag that looks like a version
 # like "1.0.0", "v0.1.0-prerelease.1", "my-app/0.1.0", "releases/v1.0.0", etc.
@@ -307,6 +308,10 @@ jobs:
             unset NODE_AUTH_TOKEN
             if [ -n "${NPM_CONFIG_USERCONFIG:-}" ] && [ -f "$NPM_CONFIG_USERCONFIG" ]; then
               sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
+            fi
+            if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+              echo "missing GitHub OIDC token environment; ensure id-token: write is granted"
+              exit 1
             fi
             publish_path="$(find ./npm -type f -name "$pkg" | head -n 1)"
             if [ -z "$publish_path" ]; then

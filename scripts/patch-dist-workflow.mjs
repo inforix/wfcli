@@ -9,6 +9,11 @@ const original = readFileSync(workflowPath, "utf8");
 let updated = original;
 
 updated = updated.replace(
+  /permissions:\n  "contents": "write"\n/,
+  'permissions:\n  "contents": "write"\n  "id-token": "write"\n'
+);
+
+updated = updated.replace(
   "host --steps=create --tag={0}",
   "host --allow-dirty --steps=create --tag={0}"
 );
@@ -44,6 +49,10 @@ updated = updated.replace(
     'unset NODE_AUTH_TOKEN',
     'if [ -n "${NPM_CONFIG_USERCONFIG:-}" ] && [ -f "$NPM_CONFIG_USERCONFIG" ]; then',
     '  sed -i \'/_authToken/d\' "$NPM_CONFIG_USERCONFIG"',
+    'fi',
+    'if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then',
+    '  echo "missing GitHub OIDC token environment; ensure id-token: write is granted"',
+    '  exit 1',
     'fi',
     'publish_path="$(find ./npm -type f -name "$pkg" | head -n 1)"',
     'if [ -z "$publish_path" ]; then',
