@@ -41,6 +41,10 @@ updated = updated.replace(
 updated = updated.replace(
   /npm publish(?: --provenance)? --access public "\.\/npm\/\$\{pkg\}"/,
   [
+    'unset NODE_AUTH_TOKEN',
+    'if [ -n "${NPM_CONFIG_USERCONFIG:-}" ] && [ -f "$NPM_CONFIG_USERCONFIG" ]; then',
+    '  sed -i \'/_authToken/d\' "$NPM_CONFIG_USERCONFIG"',
+    'fi',
     'publish_path="$(find ./npm -type f -name "$pkg" | head -n 1)"',
     'if [ -z "$publish_path" ]; then',
     '  echo "unable to locate npm package artifact: $pkg"',
