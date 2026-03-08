@@ -14,6 +14,26 @@ updated = updated.replace(
 );
 
 updated = updated.replace(
+  "|| 'plan' }} --output-format=json > plan-dist-manifest.json",
+  "|| 'plan --allow-dirty' }} --output-format=json > plan-dist-manifest.json"
+);
+
+updated = updated.replace(
+  "dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json",
+  "dist build --allow-dirty ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json"
+);
+
+updated = updated.replace(
+  "dist build ${{ needs.plan.outputs.tag-flag }} --output-format=json \"--artifacts=global\" > dist-manifest.json",
+  "dist build --allow-dirty ${{ needs.plan.outputs.tag-flag }} --output-format=json \"--artifacts=global\" > dist-manifest.json"
+);
+
+updated = updated.replace(
+  "dist host ${{ needs.plan.outputs.tag-flag }} --steps=upload --steps=release --output-format=json > dist-manifest.json",
+  "dist host --allow-dirty ${{ needs.plan.outputs.tag-flag }} --steps=upload --steps=release --output-format=json > dist-manifest.json"
+);
+
+updated = updated.replace(
   /(  publish-npm:\n[\s\S]*?    runs-on: "ubuntu-22\.04"\n)(?!    permissions:\n)/,
   `$1    permissions:\n      "id-token": "write"\n      "contents": "read"\n`
 );
