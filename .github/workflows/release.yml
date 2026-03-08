@@ -304,7 +304,15 @@ jobs:
       - run: |
           for release in $(echo "$PLAN" | jq --compact-output '.releases[] | select([.artifacts[] | endswith("-npm-package.tar.gz")] | any)'); do
             pkg=$(echo "$release" | jq '.artifacts[] | select(endswith("-npm-package.tar.gz"))' --raw-output)
-            npm publish --provenance --access public "./npm/${pkg}"
+            publish_path="./npm/${pkg}"
+            if [ "$pkg" = "wfcli-npm-package.tar.gz" ]; then
+              tmpdir="$(mktemp -d)"
+              tar -xzf "$publish_path" -C "$tmpdir"
+              jq '.name = "infopluscli"' "$tmpdir/package/package.json" > "$tmpdir/package/package.json.tmp"
+              mv "$tmpdir/package/package.json.tmp" "$tmpdir/package/package.json"
+              (cd "$tmpdir" && tar -czf "$publish_path" package)
+            fi
+            npm publish --provenance --access public "$publish_path"
           done
 
   announce:

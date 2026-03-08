@@ -14,8 +14,20 @@ updated = updated.replace(
 );
 
 updated = updated.replace(
-  'npm publish --access public "./npm/${pkg}"',
-  'npm publish --provenance --access public "./npm/${pkg}"'
+  /npm publish(?: --provenance)? --access public "\.\/npm\/\$\{pkg\}"/,
+  [
+    'publish_path="./npm/${pkg}"',
+    'if [ "$pkg" = "wfcli-npm-package.tar.gz" ]; then',
+    '  tmpdir="$(mktemp -d)"',
+    '  tar -xzf "$publish_path" -C "$tmpdir"',
+    '  jq \'.name = "infopluscli"\' "$tmpdir/package/package.json" > "$tmpdir/package/package.json.tmp"',
+    '  mv "$tmpdir/package/package.json.tmp" "$tmpdir/package/package.json"',
+    '  (cd "$tmpdir" && tar -czf "$publish_path" package)',
+    'fi',
+    'npm publish --provenance --access public "$publish_path"'
+  ]
+    .map((line, idx) => (idx === 0 ? line : `            ${line}`))
+    .join("\n")
 );
 
 updated = updated.replace(
